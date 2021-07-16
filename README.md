@@ -1,6 +1,6 @@
 # ldpc_toolbox
 
-A crate with utilities to aid in LDPC code design.
+A Rust crate with utilities to aid in LDPC code design.
 
 ## License
 

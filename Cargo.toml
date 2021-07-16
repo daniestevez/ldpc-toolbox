@@ -1,9 +1,13 @@
 [package]
 name = "ldpc-toolbox"
+description = "Utilities to aid in LDPC code design"
 version = "0.1.0"
+readme = "README.md"
 edition = "2018"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 license = "MIT OR Apache-2.0"
+keywords = ["ldpc", "fec", "graph"]
+categories = ["mathematics", "science", "simulation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
