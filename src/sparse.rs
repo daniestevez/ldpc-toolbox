@@ -3,6 +3,7 @@
 //! This module implements a representation for sparse binary matrices based on
 //! the alist format used to handle LDPC parity check matrices.
 
+use std::borrow::Borrow;
 use std::slice::Iter;
 
 mod girth;
@@ -15,6 +16,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// A sparse binary matrix
 ///
 /// The internal representation for this matrix is based on the alist format.
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct SparseMatrix {
     rows: Vec<Vec<usize>>,
     cols: Vec<Vec<usize>>,
@@ -85,6 +87,85 @@ impl SparseMatrix {
     pub fn insert(&mut self, row: usize, col: usize) {
         self.rows[row].push(col);
         self.cols[col].push(row);
+    }
+
+    /// Inserts ones in particular columns of a row
+    ///
+    /// This effect is as calling `insert()` on each of the elements
+    /// of the iterator `cols`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use ldpc_toolbox::sparse::SparseMatrix;
+    /// let mut h1 = SparseMatrix::new(10, 30);
+    /// let mut h2 = SparseMatrix::new(10, 30);
+    /// let c = vec![3, 7, 9];
+    /// h1.insert_row(0, c.iter());
+    /// for a in &c {
+    ///     h2.insert(0, *a);
+    /// }
+    /// assert_eq!(h1, h2);
+    /// ```
+    pub fn insert_row<T, S>(&mut self, row: usize, cols: T)
+    where
+        T: Iterator<Item = S>,
+        S: Borrow<usize>,
+    {
+        for col in cols {
+            self.insert(row, *col.borrow());
+        }
+    }
+
+    /// Inserts ones in a particular rows of a column
+    ///
+    /// This works like `insert_row()`.
+    pub fn insert_col<T, S>(&mut self, col: usize, rows: T)
+    where
+        T: Iterator<Item = S>,
+        S: Borrow<usize>,
+    {
+        for row in rows {
+            self.insert(*row.borrow(), col);
+        }
+    }
+
+    /// Remove all the ones in a particular row
+    pub fn clear_row(&mut self, row: usize) {
+        for &col in &self.rows[row] {
+            self.cols[col].retain(|r| *r != row);
+        }
+        self.rows[row].clear();
+    }
+
+    /// Remove all the ones in a particular column
+    pub fn clear_col(&mut self, col: usize) {
+        for &row in &self.cols[col] {
+            self.rows[row].retain(|c| *c != col);
+        }
+        self.cols[col].clear();
+    }
+
+    /// Set the elements that are equal to one in a row
+    ///
+    /// The effect of this is like calling `clear_row()` followed
+    /// by `insert_row()`.
+    pub fn set_row<T, S>(&mut self, row: usize, cols: T)
+    where
+        T: Iterator<Item = S>,
+        S: Borrow<usize>,
+    {
+        self.clear_row(row);
+        self.insert_row(row, cols);
+    }
+
+    /// Set the elements that are equal to one in a column
+    pub fn set_col<T, S>(&mut self, col: usize, rows: T)
+    where
+        T: Iterator<Item = S>,
+        S: Borrow<usize>,
+    {
+        self.clear_col(col);
+        self.insert_col(col, rows);
     }
 
     /// Returns an [Iterator] over the entries equal to one
