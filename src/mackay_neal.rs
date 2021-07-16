@@ -35,18 +35,53 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// println!("{}", h.alist());
 /// ```
 pub fn simple(nrows: usize, ncols: usize, wr: usize, wc: usize, seed: u64) -> Result<SparseMatrix> {
+    simple_min_girth(nrows, ncols, wr, wc, None, 1, seed)
+}
+
+/// A simple MacKay-Neal algorithm with minimum girth setting.
+///
+/// This algorithm works like `simple()` but at each step the candidate
+/// column is checked to see if it maintains the girth of the graph at or above
+/// some minimum `min_girth`. If not, another random candidate column is
+/// chosen according to the available rows. The algorithm aborts after
+/// `trials` random choices that are unable to yield a new column satisfying
+/// the required properties.
+pub fn simple_min_girth(
+    nrows: usize,
+    ncols: usize,
+    wr: usize,
+    wc: usize,
+    min_girth: Option<usize>,
+    trials: usize,
+    seed: u64,
+) -> Result<SparseMatrix> {
     let mut h = SparseMatrix::new(nrows, ncols);
     let mut rng = Rng::seed_from_u64(seed);
     for col in 0..ncols {
-        let avail_rows = (0..nrows).filter(|r| h.row_weight(*r) < wr);
-        let select_rows = avail_rows.choose_multiple(&mut rng, wc);
-        if select_rows.len() < wc {
-            return Err(String::from(
-                "not enough available rows to satisfy column weight",
-            ));
+        let mut correct = false;
+        for _ in 0..trials {
+            let avail_rows = (0..nrows).filter(|r| h.row_weight(*r) < wr);
+            let select_rows = avail_rows.choose_multiple(&mut rng, wc);
+            if select_rows.len() < wc {
+                return Err(String::from(
+                    "not enough available rows to satisfy column weight",
+                ));
+            }
+            h.set_col(col, select_rows.into_iter());
+            if let Some(g) = min_girth {
+                if h.girth_at_col_with_max(col, g - 1).is_none() {
+                    correct = true;
+                    break;
+                }
+            } else {
+                correct = true;
+                break;
+            }
         }
-        for row in &select_rows {
-            h.insert(*row, col);
+        if !correct {
+            return Err(String::from(
+                "exceeded iterations to find a column with acceptable girth",
+            ));
         }
     }
     Ok(h)
