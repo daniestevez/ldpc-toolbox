@@ -200,7 +200,9 @@ impl SparseMatrix {
         }
         for dir in directions.iter() {
             for el in *dir {
-                for x in &*el {
+                let mut v = el.clone();
+                v.sort_unstable();
+                for x in &v {
                     write!(w, "{} ", x + 1)?;
                 }
                 writeln!(w)?;
