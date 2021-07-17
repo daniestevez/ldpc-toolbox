@@ -17,6 +17,10 @@ struct Opt {
     /// Enables short FECFRAME
     #[structopt(long)]
     short: bool,
+
+    /// Performs girth calculation
+    #[structopt(long)]
+    girth: bool,
 }
 
 impl Opt {
@@ -55,6 +59,15 @@ impl Opt {
 
 fn main() -> Result<()> {
     let opt = Opt::from_args();
-    print!("{}", opt.code()?.h().alist());
+    let h = opt.code()?.h();
+    if opt.girth {
+        if let Some(g) = h.girth() {
+            println!("Code girth = {}", g);
+        } else {
+            println!("Code girth is infinite");
+        }
+    } else {
+        print!("{}", h.alist());
+    }
     Ok(())
 }
