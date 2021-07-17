@@ -36,6 +36,9 @@ struct Opt {
     /// Maximum seed trials
     #[structopt(long, default_value = "1000")]
     seed_trials: u64,
+    /// Maximum seed trials
+    #[structopt(long)]
+    search: bool,
 }
 
 impl Opt {
@@ -57,11 +60,17 @@ impl Opt {
     }
 }
 
+#[termination::display]
 fn main() -> Result<(), Box<dyn Error>> {
     let opt = Opt::from_args();
     let conf = opt.config();
-    let (seed, h) = conf.search(opt.seed, opt.seed_trials);
-    eprintln!("seed = {}", seed);
+    let h = if opt.search {
+        let (seed, hh) = conf.search(opt.seed, opt.seed_trials);
+        eprintln!("seed = {}", seed);
+        hh
+    } else {
+        conf.run(opt.seed)?
+    };
     println!("{}", h.alist());
     Ok(())
 }
