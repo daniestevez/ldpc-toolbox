@@ -69,7 +69,7 @@ pub enum Code {
 }
 
 impl Code {
-    /// Construct sparse matrix for the code
+    /// Construct parity check matrix for the code
     /// # Examples
     /// ```
     /// # use ldpc_toolbox::codes::dvbs2::Code;
