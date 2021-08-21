@@ -6,7 +6,10 @@
 use std::borrow::Borrow;
 use std::slice::Iter;
 
+mod bfs;
 mod girth;
+
+pub use bfs::BFSResults;
 
 /// A [`String`] with an description of the error.
 pub type Error = String;
@@ -279,7 +282,7 @@ impl SparseMatrix {
     /// assert_eq!(h.girth(), Some(4));
     /// ```
     pub fn girth(&self) -> Option<usize> {
-        girth::girth(self)
+        self.girth_with_max(usize::MAX)
     }
 
     /// Returns the girth of the bipartite graph defined by the matrix
@@ -295,7 +298,9 @@ impl SparseMatrix {
     /// If there are no cycles with length smaller or equal to `max`, then
     /// `None` is returned.
     pub fn girth_with_max(&self, max: usize) -> Option<usize> {
-        girth::girth_with_max(self, max)
+        (0..self.num_cols())
+            .filter_map(|c| self.girth_at_col_with_max(c, max))
+            .min()
     }
 
     /// Returns the girth at a particular column
@@ -307,7 +312,7 @@ impl SparseMatrix {
     /// to a column of the matrix, or `None` if there are no cycles containing
     /// that node.
     pub fn girth_at_col(&self, col: usize) -> Option<usize> {
-        girth::girth_at_col(self, col)
+        self.girth_at_node(Node::Col(col))
     }
 
     /// Returns the girth at a particular column with a maximum
@@ -316,7 +321,7 @@ impl SparseMatrix {
     /// length of the cycles considered. `None` is returned if there are no
     /// cycles containing the node with length smaller or equal than `max`.
     pub fn girth_at_col_with_max(&self, col: usize, max: usize) -> Option<usize> {
-        girth::girth_at_col_with_max(self, col, max)
+        self.girth_at_node_with_max(Node::Col(col), max)
     }
 
     /// Returns the girth at a particular row
@@ -324,7 +329,7 @@ impl SparseMatrix {
     /// This function works like `girth_at_col()` but uses the node
     /// corresponding to a row instead.
     pub fn girth_at_row(&self, row: usize) -> Option<usize> {
-        girth::girth_at_row(self, row)
+        self.girth_at_node(Node::Row(row))
     }
 
     /// Returns the girth at a particular row with a maximum
@@ -332,7 +337,48 @@ impl SparseMatrix {
     /// This function works like `girth_at_col_with_max()` but uses the node
     /// corresponding to a row instead.
     pub fn girth_at_row_with_max(&self, row: usize, max: usize) -> Option<usize> {
-        girth::girth_at_row_with_max(self, row, max)
+        self.girth_at_node_with_max(Node::Row(row), max)
+    }
+
+    /// Returns the girth at a particular node
+    ///
+    /// This function works like `girth_at_col()` and
+    /// `girth_at_row()`, but uses a `Node` to allow specifying either
+    /// a column or a row.
+    pub fn girth_at_node(&self, node: Node) -> Option<usize> {
+        self.girth_at_node_with_max(node, usize::MAX)
+    }
+
+    /// Returns the girth at a particular node with a maximum
+    ///
+    /// This function works like `girth_at_col_with_max()` and
+    /// `girth_at_row_with_max()`, but uses a `Node` to allow specifying either
+    /// a column or a row.
+    pub fn girth_at_node_with_max(&self, node: Node, max: usize) -> Option<usize> {
+        bfs::BFSContext::new(self, node).local_girth(max)
+    }
+
+    pub fn bfs(&self, node: Node) -> BFSResults {
+        bfs::BFSContext::new(self, node).bfs()
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Node {
+    Row(usize),
+    Col(usize),
+}
+
+impl Node {
+    fn iter(self, h: &SparseMatrix) -> impl Iterator<Item = Node> + '_ {
+        match self {
+            Node::Row(n) => h.iter_row(n),
+            Node::Col(n) => h.iter_col(n),
+        }
+        .map(move |&x| match self {
+            Node::Row(_) => Node::Col(x),
+            Node::Col(_) => Node::Row(x),
+        })
     }
 }
 
