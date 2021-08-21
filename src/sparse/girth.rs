@@ -106,7 +106,7 @@ pub fn girth_at_row(h: &SparseMatrix, row: usize) -> Option<usize> {
 
 pub fn girth_with_max(h: &SparseMatrix, max: usize) -> Option<usize> {
     (0..h.num_cols())
-        .filter_map(|c| girth_at_col_with_max(&h, c, max))
+        .filter_map(|c| girth_at_col_with_max(h, c, max))
         .min()
 }
 
