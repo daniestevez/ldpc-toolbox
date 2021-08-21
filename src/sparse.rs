@@ -324,14 +324,39 @@ impl SparseMatrix {
         bfs::BFSContext::new(self, node).local_girth(max)
     }
 
+    /// Run the BFS algorithm
+    ///
+    /// This uses a node of the graph associated to the matrix as the root
+    /// for the BFS algorithm and finds the distances from each of the nodes
+    /// of the graph to that root using breadth-first search.
+    /// # Examples
+    /// Run BFS on a matrix that has two connected components.
+    /// ```
+    /// # use ldpc_toolbox::sparse::SparseMatrix;
+    /// # use ldpc_toolbox::sparse::Node;
+    /// let mut h = SparseMatrix::new(4, 4);
+    /// for j in 0..4 {
+    ///     for k in 0..4 {
+    ///         if (j % 2) == (k % 2) {
+    ///             h.insert(j, k);
+    ///         }
+    ///     }
+    /// }
+    /// println!("{:?}", h.bfs(Node::Col(0)));
+    /// ```
     pub fn bfs(&self, node: Node) -> BFSResults {
         bfs::BFSContext::new(self, node).bfs()
     }
 }
 
+/// A node in the graph associated to a sparse matrix
+///
+/// A node can represent a row or a column of the graph.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Node {
+    /// Node representing row number `n`
     Row(usize),
+    /// Node representing column number `n`
     Col(usize),
 }
 

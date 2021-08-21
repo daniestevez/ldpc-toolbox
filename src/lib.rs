@@ -4,6 +4,8 @@
 //! The goal is to eventually support several LDPC design algorithms from the
 //! literature.
 
+#![warn(missing_docs)]
+
 pub mod codes;
 pub mod mackay_neal;
 pub mod rand;

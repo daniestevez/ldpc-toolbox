@@ -27,9 +27,17 @@ impl PathHead {
     }
 }
 
+/// Results for BFS algorithm
+///
+/// This gives the distances of each of the nodes of the graph from the node
+/// that was used as root for the BFS algorithm. Distances are represented
+/// as `Option<usize>`, with the value `None` for nodes that are not reachable
+/// from the root.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BFSResults {
+    /// The vector of distances from each of the row nodes to the root
     pub row_nodes_distance: Vec<Option<usize>>,
+    /// The vector of distances from each of the column nodes to the root
     pub col_nodes_distance: Vec<Option<usize>>,
 }
 
