@@ -51,8 +51,8 @@ impl BFSContext {
             length: 0,
         });
         BFSContext {
-            row_nodes: std::iter::repeat(None).take(nrows).collect(),
-            col_nodes: std::iter::repeat(None).take(ncols).collect(),
+            row_nodes: vec![None; nrows],
+            col_nodes: vec![None; ncols],
             to_visit,
         }
     }
