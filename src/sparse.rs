@@ -299,61 +299,27 @@ impl SparseMatrix {
     /// `None` is returned.
     pub fn girth_with_max(&self, max: usize) -> Option<usize> {
         (0..self.num_cols())
-            .filter_map(|c| self.girth_at_col_with_max(c, max))
+            .filter_map(|c| self.girth_at_node_with_max(Node::Col(c), max))
             .min()
     }
 
-    /// Returns the girth at a particular column
+    /// Returns the local girth at a particular node
     ///
     /// The local girth at a node of a graph is defined as the minimum
     /// length of the cycles containing that node.
     ///
     /// This function returns the local girth of at the node correponding
-    /// to a column of the matrix, or `None` if there are no cycles containing
+    /// to a column or row of the matrix, or `None` if there are no cycles containing
     /// that node.
-    pub fn girth_at_col(&self, col: usize) -> Option<usize> {
-        self.girth_at_node(Node::Col(col))
-    }
-
-    /// Returns the girth at a particular column with a maximum
-    ///
-    /// This function works like `girth_at_col()` but imposes a maximum in the
-    /// length of the cycles considered. `None` is returned if there are no
-    /// cycles containing the node with length smaller or equal than `max`.
-    pub fn girth_at_col_with_max(&self, col: usize, max: usize) -> Option<usize> {
-        self.girth_at_node_with_max(Node::Col(col), max)
-    }
-
-    /// Returns the girth at a particular row
-    ///
-    /// This function works like `girth_at_col()` but uses the node
-    /// corresponding to a row instead.
-    pub fn girth_at_row(&self, row: usize) -> Option<usize> {
-        self.girth_at_node(Node::Row(row))
-    }
-
-    /// Returns the girth at a particular row with a maximum
-    ///
-    /// This function works like `girth_at_col_with_max()` but uses the node
-    /// corresponding to a row instead.
-    pub fn girth_at_row_with_max(&self, row: usize, max: usize) -> Option<usize> {
-        self.girth_at_node_with_max(Node::Row(row), max)
-    }
-
-    /// Returns the girth at a particular node
-    ///
-    /// This function works like `girth_at_col()` and
-    /// `girth_at_row()`, but uses a `Node` to allow specifying either
-    /// a column or a row.
     pub fn girth_at_node(&self, node: Node) -> Option<usize> {
         self.girth_at_node_with_max(node, usize::MAX)
     }
 
     /// Returns the girth at a particular node with a maximum
     ///
-    /// This function works like `girth_at_col_with_max()` and
-    /// `girth_at_row_with_max()`, but uses a `Node` to allow specifying either
-    /// a column or a row.
+    /// This function works like `girth_at_node()` but imposes a maximum in the
+    /// length of the cycles considered. `None` is returned if there are no
+    /// cycles containing the node with length smaller or equal than `max`.
     pub fn girth_at_node_with_max(&self, node: Node, max: usize) -> Option<usize> {
         bfs::BFSContext::new(self, node).local_girth(max)
     }

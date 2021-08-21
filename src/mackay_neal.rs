@@ -38,7 +38,7 @@
 //!  ```
 
 use crate::rand::{Rng, *};
-use crate::sparse::SparseMatrix;
+use crate::sparse::{Node, SparseMatrix};
 use rand::seq::IteratorRandom;
 use rayon::prelude::*;
 use std::fmt;
@@ -188,7 +188,7 @@ impl MacKayNeal {
         if let Some(g) = self.min_girth {
             if self
                 .h
-                .girth_at_col_with_max(self.current_col, g - 1)
+                .girth_at_node_with_max(Node::Col(self.current_col), g - 1)
                 .is_some()
             {
                 self.h.clear_col(self.current_col);

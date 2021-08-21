@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::sparse::Node::{Col, Row};
     use crate::sparse::SparseMatrix;
 
     #[test]
@@ -11,14 +12,20 @@ mod tests {
                 h.insert(j, (j + 1) % circulant_size);
             }
             for j in 0..circulant_size {
-                assert_eq!(h.girth_at_col_with_max(j, 10), Some(2 * circulant_size));
-                assert_eq!(h.girth_at_row_with_max(j, 10), Some(2 * circulant_size));
+                assert_eq!(
+                    h.girth_at_node_with_max(Col(j), 10),
+                    Some(2 * circulant_size)
+                );
+                assert_eq!(
+                    h.girth_at_node_with_max(Row(j), 10),
+                    Some(2 * circulant_size)
+                );
             }
             for j in circulant_size..h.num_cols() {
-                assert_eq!(h.girth_at_col_with_max(j, 10), None);
+                assert_eq!(h.girth_at_node_with_max(Col(j), 10), None);
             }
             for j in circulant_size..h.num_rows() {
-                assert_eq!(h.girth_at_row_with_max(j, 10), None);
+                assert_eq!(h.girth_at_node_with_max(Row(j), 10), None);
             }
         }
     }
@@ -50,18 +57,30 @@ mod tests {
         }
         assert_eq!(h.girth_with_max(100), Some(2 * circulant_sizes.1));
         for j in 0..circulant_sizes.0 {
-            assert_eq!(h.girth_at_col_with_max(j, 100), Some(2 * circulant_sizes.0));
-            assert_eq!(h.girth_at_row_with_max(j, 100), Some(2 * circulant_sizes.0));
+            assert_eq!(
+                h.girth_at_node_with_max(Col(j), 100),
+                Some(2 * circulant_sizes.0)
+            );
+            assert_eq!(
+                h.girth_at_node_with_max(Row(j), 100),
+                Some(2 * circulant_sizes.0)
+            );
         }
         for j in circulant_sizes.0..(circulant_sizes.0 + circulant_sizes.1) {
-            assert_eq!(h.girth_at_col_with_max(j, 100), Some(2 * circulant_sizes.1));
-            assert_eq!(h.girth_at_row_with_max(j, 100), Some(2 * circulant_sizes.1));
+            assert_eq!(
+                h.girth_at_node_with_max(Col(j), 100),
+                Some(2 * circulant_sizes.1)
+            );
+            assert_eq!(
+                h.girth_at_node_with_max(Row(j), 100),
+                Some(2 * circulant_sizes.1)
+            );
         }
         for j in (circulant_sizes.0 + circulant_sizes.1)..h.num_cols() {
-            assert_eq!(h.girth_at_col_with_max(j, 100), None);
+            assert_eq!(h.girth_at_node_with_max(Col(j), 100), None);
         }
         for j in (circulant_sizes.0 + circulant_sizes.1)..h.num_rows() {
-            assert_eq!(h.girth_at_row_with_max(j, 100), None);
+            assert_eq!(h.girth_at_node_with_max(Row(j), 100), None);
         }
     }
 }
