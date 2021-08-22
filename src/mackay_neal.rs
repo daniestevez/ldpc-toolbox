@@ -75,7 +75,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Configuration for the MacKay-Neal construction.
 ///
-/// This configuraiton is used to set the parameters of the
+/// This configuration is used to set the parameters of the
 /// LDPC code to construct as well as some options that affect
 /// the exectution of the algorithm.
 #[derive(Debug, Clone, PartialEq, Eq)]
