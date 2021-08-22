@@ -10,3 +10,5 @@ pub mod codes;
 pub mod mackay_neal;
 pub mod rand;
 pub mod sparse;
+
+mod util;

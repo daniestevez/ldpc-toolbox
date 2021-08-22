@@ -39,6 +39,7 @@
 
 use crate::rand::{Rng, *};
 use crate::sparse::{Node, SparseMatrix};
+use crate::util::*;
 use rand::seq::IteratorRandom;
 use rayon::prelude::*;
 use std::fmt;
@@ -211,7 +212,7 @@ impl MacKayNeal {
                 Ok(select_rows)
             }
             FillPolicy::Uniform => {
-                let mut avail_rows: Vec<(usize, usize)> = (0..self.h.num_rows())
+                let avail_rows: Vec<(usize, usize)> = (0..self.h.num_rows())
                     .filter_map(|r| {
                         let w = self.h.row_weight(r);
                         if w < self.wr {
@@ -221,24 +222,10 @@ impl MacKayNeal {
                         }
                     })
                     .collect();
-                avail_rows.sort_unstable_by_key(|&(_, w)| w);
-                let wc = self.wc;
-                if avail_rows.len() < wc {
-                    return Err(Error::NoAvailRows);
-                }
-                let mut sure: Vec<usize> = avail_rows
-                    .iter()
-                    .take_while(|&&(_, w)| w < avail_rows[wc - 1].1)
-                    .map(|&(r, _)| r)
-                    .collect();
-                let mut additional = avail_rows
-                    .iter()
-                    .take_while(|&&(_, w)| w <= avail_rows[wc - 1].1)
-                    .filter(|&&(_, w)| w == avail_rows[wc - 1].1)
-                    .map(|&(r, _)| r)
-                    .choose_multiple(&mut self.rng, wc - sure.len());
-                sure.append(&mut additional);
-                Ok(sure)
+                avail_rows
+                    .sort_by_random_sel(self.wc, |(_, x), (_, y)| x.cmp(y), &mut self.rng)
+                    .map(|a| a.into_iter().map(|(x, _)| x).collect())
+                    .ok_or(Error::NoAvailRows)
             }
         }
     }
