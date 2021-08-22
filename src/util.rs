@@ -9,6 +9,11 @@ pub trait SortedRandomSel {
     where
         Self: Sized,
         F: FnMut(&Self::Item, &Self::Item) -> Ordering;
+
+    fn sort_by_random_min<F>(self, compare: F, rng: &mut Rng) -> Option<Self::Item>
+    where
+        Self: Sized,
+        F: FnMut(&Self::Item, &Self::Item) -> Ordering;
 }
 
 impl<T> SortedRandomSel for Vec<T> {
@@ -47,6 +52,22 @@ impl<T> SortedRandomSel for Vec<T> {
             .choose_multiple(rng, nitems - sure.len());
         sure.append(&mut additional);
         Some(sure)
+    }
+
+    fn sort_by_random_min<F>(mut self, mut compare: F, rng: &mut Rng) -> Option<Self::Item>
+    where
+        F: FnMut(&Self::Item, &Self::Item) -> Ordering,
+    {
+        let min = self.iter().min_by(|a, b| compare(a, b))?;
+        let min_idx_random = self.iter().enumerate()
+            .filter_map(|(j, x)| match compare(x, min) {
+                Ordering::Equal => Some(j),
+                _ => None
+            })
+            .choose(rng)
+            .unwrap(); // this should be nonempty, as we've checked above;
+        self.truncate(min_idx_random+1);
+        Some(self.pop().unwrap())
     }
 }
 

@@ -72,36 +72,21 @@ impl Peg {
             .map(|(j, d)| (j, d, self.h.row_weight(j)))
             .collect();
         let selected_row = row_num_dist_and_weight
-            .sort_by_random_sel(
-                1,
-                |(_, x, w), (_, y, v)| {
-                    let c = compare_some(x, y).reverse();
-                    if c == Ordering::Equal {
-                        w.cmp(v)
-                    } else {
-                        c
-                    }
+            .sort_by_random_min(
+                |(_, x, w), (_, y, v)| match compare_some(x, y).reverse() {
+                    Ordering::Equal => w.cmp(v),
+                    c => c,
                 },
                 &mut self.rng,
             )
             .ok_or(Error::NoAvailRows)?
-            .into_iter()
-            .map(|a| {
-                eprintln!(
-                    "PEG choosing row {} at distance {:?} with weight {}",
-                    a.0, a.1, a.2
-                );
-                a.0
-            })
-            .next()
-            .ok_or(Error::NoAvailRows)?;
+            .0;
         self.h.insert(selected_row, col);
         Ok(())
     }
 
     fn run(mut self) -> Result<SparseMatrix> {
         for col in 0..self.h.num_cols() {
-            eprintln!("PEG for column = {}", col);
             for _ in 0..self.wc {
                 self.insert_edge(col)?;
             }
