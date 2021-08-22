@@ -50,9 +50,22 @@ impl<T> SortedRandomSel for Vec<T> {
     }
 }
 
+pub fn compare_some<T: Ord>(x: &Option<T>, y: &Option<T>) -> Ordering {
+    if x.is_none() && y.is_none() {
+        Ordering::Equal
+    } else if x.is_none() {
+        Ordering::Greater
+    } else if y.is_none() {
+        Ordering::Less
+    } else {
+        x.cmp(y)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
 
     #[test]
     fn random_sel_all_distinct() {
@@ -79,8 +92,7 @@ mod tests {
 
     #[test]
     fn random_sel_all_equal() {
-        let mut v = vec![0; 50];
-        let u = v
+        let u = vec![0; 50]
             .sort_by_random_sel(25, |x, y| x.cmp(y), &mut Rng::seed_from_u64(0))
             .unwrap();
         assert_eq!(u.len(), 25);

@@ -1,15 +1,16 @@
-use ldpc_toolbox::codes::dvbs2::Code;
+//! Implementation of the DVB-S2 CLI tool
+
+use crate::cli::*;
+use crate::codes::dvbs2::Code;
 use structopt::StructOpt;
 
 type Error = String;
 type Result<T> = std::result::Result<T, Error>;
 
+/// DVB-S2 CLI options
 #[derive(Debug, StructOpt)]
-#[structopt(
-    name = "ldpc-toolbox-dvbs2",
-    about = "Generates the alist of DVB-S2 LDPCs"
-)]
-struct Opt {
+#[structopt(about = "Generates the alist of DVB-S2 LDPCs")]
+pub struct Opt {
     /// Coding rate
     #[structopt(short, long)]
     rate: String,
@@ -57,17 +58,18 @@ impl Opt {
     }
 }
 
-fn main() -> Result<()> {
-    let opt = Opt::from_args();
-    let h = opt.code()?.h();
-    if opt.girth {
-        if let Some(g) = h.girth() {
-            println!("Code girth = {}", g);
+impl Run for Opt {
+    fn run(&self) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let h = self.code()?.h();
+        if self.girth {
+            if let Some(g) = h.girth() {
+                println!("Code girth = {}", g);
+            } else {
+                println!("Code girth is infinite");
+            }
         } else {
-            println!("Code girth is infinite");
+            print!("{}", h.alist());
         }
-    } else {
-        print!("{}", h.alist());
+        Ok(())
     }
-    Ok(())
 }

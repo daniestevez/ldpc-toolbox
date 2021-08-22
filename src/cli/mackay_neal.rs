@@ -1,13 +1,14 @@
-use ldpc_toolbox::mackay_neal::{Config, FillPolicy};
+//! Implementation of the MacKay-Neal CLI tool
+
+use crate::cli::*;
+use crate::mackay_neal::{Config, FillPolicy};
 use std::error::Error;
 use structopt::StructOpt;
 
+/// MacKay-Neal CLI options
 #[derive(Debug, StructOpt)]
-#[structopt(
-    name = "ldpc-toolbox-mackay-neal",
-    about = "Generates LDPC codes using the MacKay-Neal algorithm"
-)]
-struct Opt {
+#[structopt(about = "Generates LDPC codes using the MacKay-Neal algorithm")]
+pub struct Opt {
     /// Number of rows
     num_rows: usize,
     /// Number of columns
@@ -60,17 +61,17 @@ impl Opt {
     }
 }
 
-#[termination::display]
-fn main() -> Result<(), Box<dyn Error>> {
-    let opt = Opt::from_args();
-    let conf = opt.config();
-    let h = if opt.search {
-        let (seed, hh) = conf.search(opt.seed, opt.seed_trials);
-        eprintln!("seed = {}", seed);
-        hh
-    } else {
-        conf.run(opt.seed)?
-    };
-    println!("{}", h.alist());
-    Ok(())
+impl Run for Opt {
+    fn run(&self) -> Result<(), Box<dyn Error>> {
+        let conf = self.config();
+        let h = if self.search {
+            let (seed, hh) = conf.search(self.seed, self.seed_trials);
+            eprintln!("seed = {}", seed);
+            hh
+        } else {
+            conf.run(self.seed)?
+        };
+        println!("{}", h.alist());
+        Ok(())
+    }
 }
