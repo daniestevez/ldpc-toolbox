@@ -2,6 +2,10 @@
 
 A Rust crate with utilities to aid in LDPC code design.
 
+## Documentation
+
+The documentation is hosted in [docs.rs](https://docs.rs/ldpc-toolbox/).
+
 ## License
 
 Licensed under either of
