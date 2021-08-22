@@ -1,5 +1,11 @@
 # ldpc_toolbox
 
+[![Crates.io][crates-badge]][crates-url]
+[![Rust](https://github.com/daniestevez/ldpc-toolbox/actions/workflows/rust.yml/badge.svg)](https://github.com/daniestevez/ldpc-toolbox/actions/workflows/rust.yml)
+
+[crates-badge]: https://img.shields.io/crates/v/ldpc-toolbox.svg
+[crates-url]: https://crates.io/crates/ldpc-toolbox
+
 A Rust crate with utilities to aid in LDPC code design.
 
 ## Documentation
