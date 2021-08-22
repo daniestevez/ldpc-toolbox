@@ -1,4 +1,9 @@
-//! Implementation of the CLI application of ldpc-toolbox
+//! `ldpc-toolbox` CLI application
+//!
+//! The CLI application is organized in several subcommands. The
+//! supported subcommands can be seen by running `ldpc-toolbox`.
+//! See the modules below for examples and more information about
+//! how to use each subcommand.
 
 use std::error::Error;
 use structopt::StructOpt;

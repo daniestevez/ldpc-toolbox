@@ -1,4 +1,26 @@
-//! Implementation of the DVB-S2 CLI tool
+//! DVB-S2 CLI subcommand
+//!
+//! This subcommand can be used to generate the LDPC codes used in the DVB-S2
+//! standard. It will print the alist of the parity check matrix to `stdout`
+//! and optionally compute and print the girth of the Tanner graph. See
+//! [`crate::codes::dvbs2`] for more information about the DVB-S2 LDPC codes.
+//!
+//! # Examples
+//! The r=1/2, n=64800 parity check matrix for the normal FECFRAMEs can
+//! be generated with
+//! ```shell
+//! $ ldpc-toolbox dvbs2 --rate 1/2
+//! ```
+//! Its girth is computed with
+//! ```shell
+//! $ ldpc-toolbox dvbs2 --rate 1/2 --girth
+//! Code girth = 6
+//! ```
+//!
+//! The n=16200 code for the short FECFRAMEs is generated with
+//! ```shell
+//! $ ldpc-toolbox dvbs2 --rate 1/2 --short
+//! ```
 
 use crate::cli::*;
 use crate::codes::dvbs2::Code;

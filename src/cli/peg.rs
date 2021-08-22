@@ -1,4 +1,21 @@
-//! Implementation of the Progressive Edge Growth (PEG) CLI tool
+//! Progressive Edge Growth (PEG) CLI subcommand
+//!
+//! This uses the Progressive Edge Growth (PEG) pseudorandom construction to
+//! build and LDPC parity check matrix. It runs the PEG algorithm and, if the
+//! construction is successful, prints to `stout` the alist of the parity check
+//! matrix. Optionally, it can also print to `stderr` the girth of the generated
+//! code. For more details about this construction, see [`crate::peg`].
+//!
+//! # Examples
+//! An r=1/2, n=16800 regular code with column weight 3 can be generated
+//! with
+//! ```shell
+//! $ ldpc-toolbox peg 8100 16200 3 0
+//! ```
+//! To construct the code and only show the girth, we run
+//! ```shell
+//! $ ldpc-toolbox peg 8100 16200 3 0 --girth > /dev/null
+//! ```
 
 use crate::cli::*;
 use crate::peg::Config;
@@ -17,6 +34,9 @@ pub struct Opt {
     wc: usize,
     /// Seed
     seed: u64,
+    /// Performs girth calculation
+    #[structopt(long)]
+    girth: bool,
 }
 
 impl Opt {
@@ -34,7 +54,12 @@ impl Run for Opt {
         let conf = self.config();
         let h = conf.run(self.seed)?;
         println!("{}", h.alist());
-        println!("Girth = {:?}", h.girth());
+        if self.girth {
+            match h.girth() {
+                Some(g) => eprintln!("Code girth = {}", g),
+                None => eprintln!("Code girth = infinity (there are no cycles)"),
+            };
+        }
         Ok(())
     }
 }
