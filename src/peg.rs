@@ -1,4 +1,27 @@
 //! # Progressive Edge Growth (PEG) LDPC construction
+//!
+//! This implements the algorithm described in *Xiao-Yu Hu, E. Eleftheriou and
+//! D. M. Arnold, "Regular and irregular progressive edge-growth tanner graphs,"
+//! in IEEE Transactions on Information Theory, vol. 51, no. 1, pp. 386-398,
+//! Jan. 2005.*
+//!
+//! The algorithm works by adding edge by edge to the Tanner graph. For each
+//! symbol node, `wc` check nodes are selected to be joined by edges. Each one
+//! is selected in a different step, and the edge is added to the graph, which
+//! affects subsequent decissions.
+//!
+//! To select an edge for the current symbol node, a breadth-first search is
+//! done with that node as the root, in order to find the distance from each of
+//! check nodes to the root. If there are any check nodes not yet reachable from
+//! the root, a node at random is selected among the unreachable nodes that
+//! have minimum degree (note that this always happens whenever the first edge
+//! is added to a symbol node). If all the check nodes are rechable from the
+//! root, the set of nodes of minimum degree among those nodes at maximum
+//! distance from the root is selected. A node is picked at random from that
+//! set.
+//!
+//! This procedure tries to maximize local girth greedily and to fill the
+//! check nodes uniformly.
 
 use crate::rand::{Rng, *};
 use crate::sparse::{Node, SparseMatrix};
@@ -10,7 +33,7 @@ use std::fmt::{Display, Formatter};
 /// Runtime errors of the PEG construction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
-    /// No rows available.
+    /// Not enought rows available.
     NoAvailRows,
 }
 
@@ -30,8 +53,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Configuration for the Progressive Edge Growth construction
 ///
 /// This configuration is used to set the parameters of the
-/// LDPC code to construct as well as some options that affect
-/// the exectution of the algorithm.
+/// LDPC code to construct.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     /// Number of rows of the parity check matrix.
