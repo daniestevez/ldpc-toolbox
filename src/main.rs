@@ -1,8 +1,8 @@
-use ldpc_toolbox::cli::{Opt, *};
+use clap::Parser;
+use ldpc_toolbox::cli::{Args, Run};
 use std::error::Error;
-use structopt::StructOpt;
 
 #[termination::display]
 fn main() -> Result<(), Box<dyn Error>> {
-    Opt::from_args().run()
+    Args::parse().run()
 }

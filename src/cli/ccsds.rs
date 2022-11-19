@@ -19,29 +19,29 @@
 
 use crate::cli::*;
 use crate::codes::ccsds::{AR4JACode, AR4JAInfoSize, AR4JARate};
-use structopt::StructOpt;
+use clap::Parser;
 
 type Error = String;
 type Result<T> = std::result::Result<T, Error>;
 
-/// CCSDS CLI options.
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Generates the alist of CCSDS LDPCs")]
-pub struct Opt {
+/// CCSDS CLI arguments.
+#[derive(Debug, Parser)]
+#[command(about = "Generates the alist of CCSDS LDPCs")]
+pub struct Args {
     /// Coding rate
-    #[structopt(short, long)]
+    #[arg(short, long)]
     rate: String,
 
     /// Information block size (k)
-    #[structopt(long)]
+    #[arg(long)]
     block_size: usize,
 
     /// Performs girth calculation
-    #[structopt(long)]
+    #[arg(long)]
     girth: bool,
 }
 
-impl Opt {
+impl Args {
     fn code(&self) -> Result<AR4JACode> {
         let rate = match &*self.rate {
             "1/2" => AR4JARate::R1_2,
@@ -59,7 +59,7 @@ impl Opt {
     }
 }
 
-impl Run for Opt {
+impl Run for Args {
     fn run(&self) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let h = self.code()?.h();
         if self.girth {

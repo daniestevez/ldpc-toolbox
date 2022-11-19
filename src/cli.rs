@@ -5,8 +5,8 @@
 //! See the modules below for examples and more information about
 //! how to use each subcommand.
 
+use clap::Parser;
 use std::error::Error;
-use structopt::StructOpt;
 
 pub mod ccsds;
 pub mod dvbs2;
@@ -19,27 +19,27 @@ pub trait Run {
     fn run(&self) -> Result<(), Box<dyn Error>>;
 }
 
-/// CLI options
-#[derive(Debug, StructOpt)]
-#[structopt(name = "ldpc-toolbox", about = "LDPC toolbox")]
-pub enum Opt {
+/// CLI arguments.
+#[derive(Debug, Parser)]
+#[command(author, version, name = "ldpc-toolbox", about = "LDPC toolbox")]
+pub enum Args {
     /// ccsds subcommand
-    CCSDS(ccsds::Opt),
+    CCSDS(ccsds::Args),
     /// dvbs2 subcommand
-    DVBS2(dvbs2::Opt),
+    DVBS2(dvbs2::Args),
     /// mackay-neal subcommand
-    MackayNeal(mackay_neal::Opt),
+    MackayNeal(mackay_neal::Args),
     /// peg subcommand
-    PEG(peg::Opt),
+    PEG(peg::Args),
 }
 
-impl Run for Opt {
+impl Run for Args {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         match self {
-            Opt::CCSDS(x) => x.run(),
-            Opt::DVBS2(x) => x.run(),
-            Opt::MackayNeal(x) => x.run(),
-            Opt::PEG(x) => x.run(),
+            Args::CCSDS(x) => x.run(),
+            Args::DVBS2(x) => x.run(),
+            Args::MackayNeal(x) => x.run(),
+            Args::PEG(x) => x.run(),
         }
     }
 }

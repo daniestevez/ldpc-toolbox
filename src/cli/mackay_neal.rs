@@ -37,13 +37,13 @@
 
 use crate::cli::*;
 use crate::mackay_neal::{Config, FillPolicy};
+use clap::Parser;
 use std::error::Error;
-use structopt::StructOpt;
 
-/// MacKay-Neal CLI options
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Generates LDPC codes using the MacKay-Neal algorithm")]
-pub struct Opt {
+/// MacKay-Neal CLI arguments.
+#[derive(Debug, Parser)]
+#[command(about = "Generates LDPC codes using the MacKay-Neal algorithm")]
+pub struct Args {
     /// Number of rows
     num_rows: usize,
     /// Number of columns
@@ -77,7 +77,7 @@ pub struct Opt {
     search: bool,
 }
 
-impl Opt {
+impl Args {
     fn config(&self) -> Config {
         Config {
             nrows: self.num_rows,
@@ -96,7 +96,7 @@ impl Opt {
     }
 }
 
-impl Run for Opt {
+impl Run for Args {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         let conf = self.config();
         let h = if self.search {

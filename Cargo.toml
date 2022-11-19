@@ -1,7 +1,7 @@
 [package]
 name = "ldpc-toolbox"
 description = "Utilities to aid in LDPC code design"
-version = "0.1.0"
+version = "0.2.0"
 readme = "README.md"
 homepage = "https://github.com/daniestevez/ldpc-toolbox"
 repository = "https://github.com/daniestevez/ldpc-toolbox"
@@ -15,10 +15,10 @@ categories = ["mathematics", "science", "simulation"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 rand_chacha = "0.3"
 rand = "0.8"
 rand_core = "0.6"
 rayon = "1.5"
 enum-iterator = "1"
-structopt = "0.3"
 termination = "0.1"

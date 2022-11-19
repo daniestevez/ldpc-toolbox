@@ -19,13 +19,13 @@
 
 use crate::cli::*;
 use crate::peg::Config;
+use clap::Parser;
 use std::error::Error;
-use structopt::StructOpt;
 
-/// PEG CLI options
-#[derive(Debug, StructOpt)]
+/// PEG CLI arguments.
+#[derive(Debug, Parser)]
 #[structopt(about = "Generates LDPC codes using the Progressive Edge Growth algorithm")]
-pub struct Opt {
+pub struct Args {
     /// Number of rows
     num_rows: usize,
     /// Number of columns
@@ -39,7 +39,7 @@ pub struct Opt {
     girth: bool,
 }
 
-impl Opt {
+impl Args {
     fn config(&self) -> Config {
         Config {
             nrows: self.num_rows,
@@ -49,7 +49,7 @@ impl Opt {
     }
 }
 
-impl Run for Opt {
+impl Run for Args {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         let conf = self.config();
         let h = conf.run(self.seed)?;

@@ -24,29 +24,29 @@
 
 use crate::cli::*;
 use crate::codes::dvbs2::Code;
-use structopt::StructOpt;
+use clap::Parser;
 
 type Error = String;
 type Result<T> = std::result::Result<T, Error>;
 
-/// DVB-S2 CLI options
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Generates the alist of DVB-S2 LDPCs")]
-pub struct Opt {
+/// DVB-S2 CLI arguments.
+#[derive(Debug, Parser)]
+#[command(about = "Generates the alist of DVB-S2 LDPCs")]
+pub struct Args {
     /// Coding rate
-    #[structopt(short, long)]
+    #[arg(short, long)]
     rate: String,
 
     /// Enables short FECFRAME
-    #[structopt(long)]
+    #[arg(long)]
     short: bool,
 
     /// Performs girth calculation
-    #[structopt(long)]
+    #[arg(long)]
     girth: bool,
 }
 
-impl Opt {
+impl Args {
     fn code(&self) -> Result<Code> {
         match (&*self.rate, self.short) {
             ("1/4", false) => Ok(Code::R1_4),
@@ -80,7 +80,7 @@ impl Opt {
     }
 }
 
-impl Run for Opt {
+impl Run for Args {
     fn run(&self) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let h = self.code()?.h();
         if self.girth {
