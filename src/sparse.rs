@@ -77,7 +77,10 @@ impl SparseMatrix {
         self.cols[col].contains(&row)
     }
 
-    /// Inserts a one in a particular row and column
+    /// Inserts a one in a particular row and column.
+    ///
+    /// If there is already a one in this row and column, this function does
+    /// nothing.
     ///
     /// # Examples
     /// ```
@@ -88,8 +91,10 @@ impl SparseMatrix {
     /// assert!(h.contains(3, 7));
     /// ```
     pub fn insert(&mut self, row: usize, col: usize) {
-        self.rows[row].push(col);
-        self.cols[col].push(row);
+	if !self.contains(row, col) {
+            self.rows[row].push(col);
+            self.cols[col].push(row);
+	}
     }
 
     /// Inserts ones in particular columns of a row
@@ -384,6 +389,17 @@ mod tests {
         h.insert(27, 154);
         assert!(h.contains(27, 154));
         assert!(!h.contains(28, 154));
+    }
+
+    #[test]
+    fn test_insert_twice() {
+	let mut h = SparseMatrix::new(100, 300);
+	h.insert(27, 154);
+	h.insert(43, 28);
+	h.insert(53, 135);
+	let h2 = h.clone();
+	h.insert(43, 28);
+	assert_eq!(h, h2);
     }
 
     #[test]
