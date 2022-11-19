@@ -91,10 +91,39 @@ impl SparseMatrix {
     /// assert!(h.contains(3, 7));
     /// ```
     pub fn insert(&mut self, row: usize, col: usize) {
-	if !self.contains(row, col) {
+        if !self.contains(row, col) {
             self.rows[row].push(col);
             self.cols[col].push(row);
-	}
+        }
+    }
+
+    /// Removes a one in a particular row and column.
+    ///
+    /// If there is no one in this row and column, this function does nothing.
+    ///
+    /// # Examples
+    /// ```
+    /// # use ldpc_toolbox::sparse::SparseMatrix;
+    /// let mut h = SparseMatrix::new(10, 30);
+    /// h.insert(3, 7);
+    /// assert!(h.contains(3, 7));
+    /// h.remove(3, 7);
+    /// assert!(!h.contains(3, 7));
+    /// ```
+    pub fn remove(&mut self, row: usize, col: usize) {
+        self.rows[row].retain(|&c| c != col);
+        self.cols[col].retain(|&r| r != row);
+    }
+
+    /// Toggles the 0/1 in a particular row and column.
+    ///
+    /// If the row and column contains a zero, this function sets a one, and
+    /// vice versa. This is useful to implement addition modulo 2.
+    pub fn toggle(&mut self, row: usize, col: usize) {
+        match self.contains(row, col) {
+            true => self.remove(row, col),
+            false => self.insert(row, col),
+        }
     }
 
     /// Inserts ones in particular columns of a row
@@ -393,13 +422,13 @@ mod tests {
 
     #[test]
     fn test_insert_twice() {
-	let mut h = SparseMatrix::new(100, 300);
-	h.insert(27, 154);
-	h.insert(43, 28);
-	h.insert(53, 135);
-	let h2 = h.clone();
-	h.insert(43, 28);
-	assert_eq!(h, h2);
+        let mut h = SparseMatrix::new(100, 300);
+        h.insert(27, 154);
+        h.insert(43, 28);
+        h.insert(53, 135);
+        let h2 = h.clone();
+        h.insert(43, 28);
+        assert_eq!(h, h2);
     }
 
     #[test]
