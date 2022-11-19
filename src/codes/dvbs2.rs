@@ -88,7 +88,7 @@ impl Code {
                 .map(|x| (x + w * self.q()) % self.m());
             h.insert_col(j, a);
         }
-        // partity bits
+        // parity bits
         h.insert(0, self.k());
         for j in 1..self.m() {
             h.insert(j, j + self.k());
