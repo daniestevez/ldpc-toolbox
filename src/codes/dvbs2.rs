@@ -8,7 +8,7 @@
 //! ## References
 //! \[1\] ETSI EN 302 307-1 V1.4.1 (2014-11)
 use crate::sparse::SparseMatrix;
-use enum_iterator::IntoEnumIterator;
+use enum_iterator::Sequence;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum FrameLen {
@@ -16,7 +16,7 @@ enum FrameLen {
     Short,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, IntoEnumIterator)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Sequence)]
 /// DVB-S2 LDPC code types
 pub enum Code {
     /// rate 1/4 normal FECFRAME
@@ -2174,7 +2174,7 @@ mod tests {
 
     #[test]
     fn construct_h() {
-        for code in Code::into_enum_iter() {
+        for code in enum_iterator::all::<Code>() {
             let h = code.h();
             assert_eq!(h.num_rows(), code.m());
             assert_eq!(h.num_cols(), code.n());
@@ -2186,7 +2186,7 @@ mod tests {
         let irregular = [Code::R1_4short, Code::R4_5short];
         let very_irregular = [Code::R1_2short, Code::R3_4short, Code::R5_6short];
 
-        for code in Code::into_enum_iter().filter(|code| !very_irregular.contains(code)) {
+        for code in enum_iterator::all::<Code>().filter(|code| !very_irregular.contains(code)) {
             let h = code.h();
             let w = h.row_weight(0);
             let mut all_rows = 1..h.num_rows();

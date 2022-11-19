@@ -59,14 +59,16 @@ impl<T> SortedRandomSel for Vec<T> {
         F: FnMut(&Self::Item, &Self::Item) -> Ordering,
     {
         let min = self.iter().min_by(|a, b| compare(a, b))?;
-        let min_idx_random = self.iter().enumerate()
+        let min_idx_random = self
+            .iter()
+            .enumerate()
             .filter_map(|(j, x)| match compare(x, min) {
                 Ordering::Equal => Some(j),
-                _ => None
+                _ => None,
             })
             .choose(rng)
             .unwrap(); // this should be nonempty, as we've checked above;
-        self.truncate(min_idx_random+1);
+        self.truncate(min_idx_random + 1);
         Some(self.pop().unwrap())
     }
 }
