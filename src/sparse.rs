@@ -205,6 +205,15 @@ impl SparseMatrix {
         self.insert_col(col, rows);
     }
 
+    /// Returns an [Iterator] over the indices entries equal to one in all the
+    /// matrix.
+    pub fn iter_all(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.rows
+            .iter()
+            .enumerate()
+            .flat_map(|(j, r)| r.iter().map(move |&k| (j, k)))
+    }
+
     /// Returns an [Iterator] over the entries equal to one
     /// in a particular row
     pub fn iter_row(&self, row: usize) -> Iter<'_, usize> {
@@ -429,6 +438,28 @@ mod tests {
         let h2 = h.clone();
         h.insert(43, 28);
         assert_eq!(h, h2);
+    }
+
+    #[test]
+    fn iter_all() {
+        use std::collections::HashSet;
+
+        let mut h = SparseMatrix::new(10, 20);
+        let entries = [
+            (7, 8),
+            (5, 14),
+            (6, 6),
+            (6, 7),
+            (8, 10),
+            (0, 4),
+            (0, 0),
+            (0, 15),
+        ];
+        for entry in &entries {
+            h.insert(entry.0, entry.1);
+        }
+        let result = h.iter_all().collect::<HashSet<_>>();
+        assert_eq!(result, HashSet::from(entries));
     }
 
     #[test]

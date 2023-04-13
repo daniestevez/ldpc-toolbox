@@ -12,6 +12,8 @@
 
 pub mod cli;
 pub mod codes;
+pub mod encoder;
+pub mod gf2;
 pub mod mackay_neal;
 pub mod peg;
 pub mod rand;

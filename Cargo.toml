@@ -16,9 +16,11 @@ categories = ["mathematics", "science", "simulation"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+enum-iterator = "1"
+ndarray = "0.15"
+num-traits = "0.2"
 rand_chacha = "0.3"
 rand = "0.8"
 rand_core = "0.6"
 rayon = "1.5"
-enum-iterator = "1"
 termination = "0.1"
