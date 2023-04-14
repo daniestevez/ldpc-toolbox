@@ -100,7 +100,9 @@ impl Run for Args {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         let conf = self.config();
         let h = if self.search {
-            let (seed, hh) = conf.search(self.seed, self.seed_trials);
+            let (seed, hh) = conf
+                .search(self.seed, self.seed_trials)
+                .ok_or("no solution found")?;
             eprintln!("seed = {}", seed);
             hh
         } else {

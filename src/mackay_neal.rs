@@ -116,13 +116,13 @@ impl Config {
     ///
     /// The search is performed in parallel using a parallel iterator
     /// from the rayon crate. This function returns the successful seed
-    /// and the corresponding parity check matrix.
-    pub fn search(&self, start_seed: u64, max_tries: u64) -> (u64, SparseMatrix) {
+    /// and the corresponding parity check matrix, if one is found, or
+    /// `None` otherwise.
+    pub fn search(&self, start_seed: u64, max_tries: u64) -> Option<(u64, SparseMatrix)> {
         (start_seed..start_seed + max_tries)
             .into_par_iter()
             .filter_map(|s| self.run(s).ok().map(|x| (s, x)))
             .find_any(|_| true)
-            .expect("this should not finish if there are no successful seeds")
     }
 }
 
