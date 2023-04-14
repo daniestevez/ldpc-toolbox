@@ -44,6 +44,7 @@ impl One for GF2 {
 impl Add for GF2 {
     type Output = GF2;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn add(self, rhs: GF2) -> GF2 {
         GF2(self.0 ^ rhs.0)
     }
@@ -52,6 +53,7 @@ impl Add for GF2 {
 impl Sub for GF2 {
     type Output = GF2;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn sub(self, rhs: GF2) -> GF2 {
         self + rhs
     }
@@ -60,6 +62,7 @@ impl Sub for GF2 {
 impl Mul for GF2 {
     type Output = GF2;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn mul(self, rhs: GF2) -> GF2 {
         GF2(self.0 & rhs.0)
     }

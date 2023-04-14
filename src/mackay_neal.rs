@@ -119,7 +119,6 @@ impl Config {
     /// and the corresponding parity check matrix.
     pub fn search(&self, start_seed: u64, max_tries: u64) -> (u64, SparseMatrix) {
         (start_seed..start_seed + max_tries)
-            .into_iter()
             .into_par_iter()
             .filter_map(|s| self.run(s).ok().map(|x| (s, x)))
             .find_any(|_| true)
