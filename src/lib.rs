@@ -17,6 +17,7 @@ pub mod gf2;
 pub mod mackay_neal;
 pub mod peg;
 pub mod rand;
+pub mod simulation;
 pub mod sparse;
 
 mod util;
