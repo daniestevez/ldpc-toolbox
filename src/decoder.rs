@@ -172,6 +172,9 @@ impl Decoder {
 }
 
 fn phi(x: f64) -> f64 {
+    // Ensure that x is not zero. Otherwise the output will be +inf, which gives
+    // problems when computing (+inf) - (+inf).
+    let x = x.max(1e-30);
     -((0.5 * x).tanh().ln())
 }
 
