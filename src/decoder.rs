@@ -5,6 +5,7 @@
 //! details about their numerical algorithms and data types.
 
 use crate::sparse::SparseMatrix;
+use num_traits::Zero;
 
 /// LDPC belief propagation decoder.
 #[derive(Debug, Clone, PartialEq)]
@@ -49,14 +50,19 @@ impl Decoder {
     ///
     /// The parameters are the LLRs for the received codeword and the maximum
     /// number of iterations to perform. If decoding is successful, the function
-    /// returns the (hard decision) on the decoded codeword and the number of
-    /// iterations used in decoding. If decoding is not successful, `None` is
-    /// returned.
-    pub fn decode(&mut self, llrs: &[f64], max_iterations: usize) -> Option<(Vec<u8>, usize)> {
+    /// returns an `Ok` containing the (hard decision) on the decoded codeword
+    /// and the number of iterations used in decoding. If decoding is not
+    /// successful, the function returns an `Err` containing the hard decision
+    /// on the final decoder LLRs (which still has some bit errors).
+    pub fn decode(
+        &mut self,
+        llrs: &[f32],
+        max_iterations: usize,
+    ) -> Result<(Vec<u8>, usize), Vec<u8>> {
         assert_eq!(llrs.len(), self.input_llrs.len());
         if self.check_llrs(llrs) {
             // No bit errors case
-            return Some((Self::hard_decision(llrs), 0));
+            return Ok((Self::hard_decision(llrs), 0));
         }
         self.initialize(llrs);
         for iteration in 1..=max_iterations {
@@ -64,15 +70,17 @@ impl Decoder {
             self.process_variable_nodes();
             if self.check_llrs(&self.output_llrs) {
                 // Decode succeeded
-                return Some((Self::hard_decision(&self.output_llrs), iteration));
+                return Ok((Self::hard_decision(&self.output_llrs), iteration));
             }
         }
         // Decode failed
-        None
+        Err(Self::hard_decision(&self.output_llrs))
     }
 
-    fn initialize(&mut self, llrs: &[f64]) {
-        self.input_llrs.copy_from_slice(llrs);
+    fn initialize(&mut self, llrs: &[f32]) {
+        for (x, &y) in self.input_llrs.iter_mut().zip(llrs.iter()) {
+            *x = f64::from(y)
+        }
 
         // First variable messages use only input LLRs
         for (v, &llr) in self.input_llrs.iter().enumerate() {
@@ -152,7 +160,10 @@ impl Decoder {
         (llr, new_messages)
     }
 
-    fn check_llrs(&self, llrs: &[f64]) -> bool {
+    fn check_llrs<T>(&self, llrs: &[T]) -> bool
+    where
+        T: std::cmp::PartialOrd<T> + Zero,
+    {
         // Check if hard decision on LLRs satisfies the parity check equations
         !(0..self.h.num_rows()).any(|r| {
             self.h
@@ -164,9 +175,12 @@ impl Decoder {
         })
     }
 
-    fn hard_decision(llrs: &[f64]) -> Vec<u8> {
+    fn hard_decision<T>(llrs: &[T]) -> Vec<u8>
+    where
+        T: std::cmp::PartialOrd<T> + Zero,
+    {
         llrs.iter()
-            .map(|&llr| if llr <= 0.0 { 1 } else { 0 })
+            .map(|llr| if *llr <= T::zero() { 1 } else { 0 })
             .collect()
     }
 }
@@ -225,7 +239,7 @@ mod test {
 
     // These are based on example 2.23 in Sarah J. Johnson - Iterative Error Correction
 
-    fn to_llrs(bits: &[u8]) -> Vec<f64> {
+    fn to_llrs(bits: &[u8]) -> Vec<f32> {
         bits.iter()
             .map(|&b| if b == 0 { 1.3863 } else { -1.3863 })
             .collect()

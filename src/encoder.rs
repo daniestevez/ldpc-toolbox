@@ -14,14 +14,16 @@
 use crate::{gf2::GF2, sparse::SparseMatrix};
 use ndarray::{s, Array1, Array2, ArrayBase, Data, Ix1};
 use num_traits::One;
+use thiserror::Error;
 
 mod gauss;
 
 /// LDPC encoder error.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Error)]
 pub enum Error {
-    /// The square submatrix formed by the last n-k columns of the parity check
+    /// The square submatrix formed by the last columns of the parity check
     /// matrix is not invertible, so the encoder cannot be constructed.
+    #[error("the square matrix formed by the last columns of the parity check is not invertible")]
     SubmatrixNotInvertible,
 }
 

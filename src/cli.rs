@@ -8,6 +8,7 @@
 use clap::Parser;
 use std::error::Error;
 
+pub mod ber;
 pub mod ccsds;
 pub mod dvbs2;
 pub mod mackay_neal;
@@ -23,6 +24,8 @@ pub trait Run {
 #[derive(Debug, Parser)]
 #[command(author, version, name = "ldpc-toolbox", about = "LDPC toolbox")]
 pub enum Args {
+    /// ber subcommand
+    BER(ber::Args),
     /// ccsds subcommand
     CCSDS(ccsds::Args),
     /// dvbs2 subcommand
@@ -36,6 +39,7 @@ pub enum Args {
 impl Run for Args {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         match self {
+            Args::BER(x) => x.run(),
             Args::CCSDS(x) => x.run(),
             Args::DVBS2(x) => x.run(),
             Args::MackayNeal(x) => x.run(),
