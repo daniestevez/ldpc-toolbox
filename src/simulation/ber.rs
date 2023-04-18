@@ -16,27 +16,51 @@ use crate::{
 use ndarray::Array1;
 use num_traits::{One, Zero};
 use rand::{distributions::Standard, Rng};
-use std::time::{Duration, Instant};
+use std::{
+    sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError},
+    time::{Duration, Instant},
+};
 
 /// BER test.
 ///
 /// This struct is used to configure and run a BER test.
 #[derive(Debug)]
 pub struct BerTest {
+    num_workers: usize,
     k: usize,
-    n: usize,
+    rate: f64,
+    encoder: Encoder,
+    puncturer: Option<Puncturer>,
+    modulator: BpskModulator,
+    decoder: Decoder,
+    ebn0s_db: Vec<f32>,
+    statistics: Vec<Statistics>,
+    max_iterations: usize,
+    max_frame_errors: u64,
+}
+
+#[derive(Debug)]
+struct Worker {
+    terminate_rx: Receiver<()>,
+    results_tx: Sender<WorkerResult>,
+    k: usize,
     encoder: Encoder,
     puncturer: Option<Puncturer>,
     modulator: BpskModulator,
     channel: AwgnChannel,
     demodulator: BpskDemodulator,
     decoder: Decoder,
-    current_statistics: CurrentStatistics,
-    ebn0s_db: Vec<f32>,
-    statistics: Vec<Statistics>,
     max_iterations: usize,
-    max_frame_errors: u64,
 }
+
+#[derive(Debug, Clone)]
+struct WorkerResultOk {
+    bit_errors: u64,
+    frame_error: bool,
+    false_decode: bool,
+}
+
+type WorkerResult = Result<WorkerResultOk, ()>;
 
 #[derive(Debug, Clone, PartialEq)]
 struct CurrentStatistics {
@@ -94,19 +118,23 @@ impl BerTest {
         max_iterations: usize,
         ebn0s_db: &[f32],
     ) -> Result<BerTest, Error> {
+        let k = h.num_cols() - h.num_rows();
+        let n = h.num_cols();
+        let puncturer = puncturing_pattern.map(Puncturer::new);
+        let puncturer_rate = if let Some(p) = puncturer.as_ref() {
+            p.rate()
+        } else {
+            1.0
+        };
+        let rate = puncturer_rate * k as f64 / n as f64;
         Ok(BerTest {
-            k: h.num_cols() - h.num_rows(),
-            n: h.num_cols(),
+            num_workers: num_cpus::get(),
+            k,
+            rate,
             encoder: Encoder::from_h(&h)?,
-            puncturer: puncturing_pattern.map(Puncturer::new),
+            puncturer,
             modulator: BpskModulator::new(),
-            // The channel and demodulator are thrown away every time we change
-            // Eb/N0. We initialize to arbitrary values.
-            channel: AwgnChannel::new(1.0),
-            demodulator: BpskDemodulator::new(1.0),
             decoder: Decoder::new(h),
-            // These statistics will be discarded when we start.
-            current_statistics: CurrentStatistics::new(),
             ebn0s_db: ebn0s_db.to_owned(),
             statistics: Vec::with_capacity(ebn0s_db.len()),
             max_iterations,
@@ -118,67 +146,135 @@ impl BerTest {
     ///
     /// This function runs the BER test until completion. It returns a list of
     /// statistics for each Eb/N0, or an error.
-    pub fn run<R: Rng>(
-        mut self,
-        rng: &mut R,
-    ) -> Result<Vec<Statistics>, Box<dyn std::error::Error>> {
-        let puncturer_rate = if let Some(p) = self.puncturer.as_ref() {
-            p.rate()
-        } else {
-            1.0
-        };
-        let rate = puncturer_rate * self.k as f64 / self.n as f64;
-
-        for ebn0_db in self.ebn0s_db {
+    pub fn run(mut self) -> Result<Vec<Statistics>, Box<dyn std::error::Error>> {
+        for &ebn0_db in &self.ebn0s_db {
             let ebn0 = 10.0_f64.powf(0.1 * f64::from(ebn0_db));
-            let esn0 = rate * ebn0;
+            let esn0 = self.rate * ebn0;
             let noise_sigma = (0.5 / esn0).sqrt() as f32;
-            self.channel = AwgnChannel::new(noise_sigma);
-            self.demodulator = BpskDemodulator::new(noise_sigma);
-            self.current_statistics = CurrentStatistics::new();
-            while self.current_statistics.frame_errors < self.max_frame_errors {
-                let message = Self::random_message(rng, self.k);
-                let codeword = self.encoder.encode(&Self::gf2_array(&message));
-                let transmitted = match self.puncturer.as_ref() {
-                    Some(p) => p.puncture(&codeword)?,
-                    None => codeword,
-                };
-                let mut symbols = self.modulator.modulate(&transmitted);
-                self.channel.add_noise(rng, &mut symbols);
-                let llrs_demod = self.demodulator.demodulate(&symbols);
-                let llrs_decoder = match self.puncturer.as_ref() {
-                    Some(p) => p.depuncture(&llrs_demod)?,
-                    None => llrs_demod,
-                };
+            let (results_tx, results_rx) = mpsc::channel();
+            let workers = std::iter::repeat_with(|| {
+                let (mut worker, terminate_tx) = self.make_worker(noise_sigma, results_tx.clone());
+                let handle = std::thread::spawn(move || worker.work());
+                (handle, terminate_tx)
+            })
+            .take(self.num_workers)
+            .collect::<Vec<_>>();
 
-                let (decoded, success) =
-                    match self.decoder.decode(&llrs_decoder, self.max_iterations) {
-                        Ok((d, _)) => (d, true),
-                        Err(d) => (d, false),
-                    };
-                // Count only bit errors in the systematic part of the codeword
-                let bit_errors = message
-                    .iter()
-                    .zip(decoded.iter())
-                    .filter(|(&a, &b)| a != b)
-                    .count() as u64;
-                self.current_statistics.bit_errors += bit_errors;
-                if bit_errors > 0 {
-                    self.current_statistics.frame_errors += 1;
-                    if success {
-                        self.current_statistics.false_decodes += 1;
+            let mut current_statistics = CurrentStatistics::new();
+            while current_statistics.frame_errors < self.max_frame_errors {
+                match results_rx.recv().unwrap() {
+                    Ok(result) => {
+                        current_statistics.bit_errors += result.bit_errors;
+                        current_statistics.frame_errors += u64::from(result.frame_error);
+                        current_statistics.false_decodes += u64::from(result.false_decode);
+                        current_statistics.num_frames += 1;
                     }
+                    Err(()) => break,
                 }
-                self.current_statistics.num_frames += 1;
-                dbg!(&self.current_statistics);
             }
+
+            for (_, terminate_tx) in workers.iter() {
+                // we don't care if this fails because the worker has terminated
+                // and dropped the channel.
+                let _ = terminate_tx.send(());
+            }
+
+            for (handle, _) in workers.into_iter() {
+                // This cannot be written with the question mark because the
+                // error isn't Sized.
+                #[allow(clippy::question_mark)]
+                if let Err(e) = handle.join().unwrap() {
+                    return Err(e);
+                }
+            }
+
             self.statistics.push(Statistics::from_current(
-                &self.current_statistics,
+                &current_statistics,
                 ebn0_db,
                 self.k,
             ));
         }
         Ok(self.statistics)
+    }
+
+    fn make_worker(
+        &self,
+        noise_sigma: f32,
+        results_tx: Sender<WorkerResult>,
+    ) -> (Worker, SyncSender<()>) {
+        let (terminate_tx, terminate_rx) = mpsc::sync_channel(1);
+        (
+            Worker {
+                terminate_rx,
+                results_tx,
+                k: self.k,
+                encoder: self.encoder.clone(),
+                puncturer: self.puncturer.clone(),
+                modulator: self.modulator.clone(),
+                channel: AwgnChannel::new(noise_sigma),
+                demodulator: BpskDemodulator::new(noise_sigma),
+                decoder: self.decoder.clone(),
+                max_iterations: self.max_iterations,
+            },
+            terminate_tx,
+        )
+    }
+}
+
+impl Worker {
+    fn work(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let mut rng = rand::thread_rng();
+        loop {
+            match self.terminate_rx.try_recv() {
+                Ok(()) => return Ok(()),
+                Err(TryRecvError::Disconnected) => panic!(),
+                Err(TryRecvError::Empty) => (),
+            };
+            let result = self.simulate(&mut rng);
+            let to_send = match result.as_ref() {
+                Ok(r) => Ok(r.clone()),
+                Err(_) => Err(()),
+            };
+            self.results_tx.send(to_send).unwrap();
+            result?;
+        }
+    }
+
+    fn simulate<R: Rng>(
+        &mut self,
+        rng: &mut R,
+    ) -> Result<WorkerResultOk, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let message = Self::random_message(rng, self.k);
+        let codeword = self.encoder.encode(&Self::gf2_array(&message));
+        let transmitted = match self.puncturer.as_ref() {
+            Some(p) => p.puncture(&codeword)?,
+            None => codeword,
+        };
+        let mut symbols = self.modulator.modulate(&transmitted);
+        self.channel.add_noise(rng, &mut symbols);
+        let llrs_demod = self.demodulator.demodulate(&symbols);
+        let llrs_decoder = match self.puncturer.as_ref() {
+            Some(p) => p.depuncture(&llrs_demod)?,
+            None => llrs_demod,
+        };
+
+        let (decoded, success) = match self.decoder.decode(&llrs_decoder, self.max_iterations) {
+            Ok((d, _)) => (d, true),
+            Err(d) => (d, false),
+        };
+        // Count only bit errors in the systematic part of the codeword
+        let bit_errors = message
+            .iter()
+            .zip(decoded.iter())
+            .filter(|(&a, &b)| a != b)
+            .count() as u64;
+        let frame_error = bit_errors > 0;
+        let false_decode = frame_error && success;
+        Ok(WorkerResultOk {
+            bit_errors,
+            frame_error,
+            false_decode,
+        })
     }
 
     fn random_message<R: Rng>(rng: &mut R, size: usize) -> Vec<u8> {

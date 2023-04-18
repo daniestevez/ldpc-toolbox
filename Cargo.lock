@@ -276,6 +276,7 @@ dependencies = [
  "enum-iterator",
  "ndarray",
  "num-traits",
+ "num_cpus",
  "rand",
  "rand_chacha",
  "rand_core",

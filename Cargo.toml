@@ -18,6 +18,7 @@ categories = ["mathematics", "science", "simulation"]
 clap = { version = "4", features = ["derive"] }
 enum-iterator = "1"
 ndarray = "0.15"
+num_cpus = "1"
 num-traits = "0.2"
 rand_chacha = "0.3"
 rand = "0.8"

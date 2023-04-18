@@ -51,8 +51,7 @@ impl Run for Args {
             self.max_iter,
             &ebn0s,
         )?;
-        let mut rng = rand::thread_rng();
-        let stats = test.run(&mut rng)?;
+        let stats = test.run()?;
         println!("{:?}", stats);
         Ok(())
     }
