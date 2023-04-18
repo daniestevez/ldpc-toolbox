@@ -16,7 +16,10 @@ categories = ["mathematics", "science", "simulation"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+console = "0.15"
+ctrlc = "3"
 enum-iterator = "1"
+humantime = "2"
 ndarray = "0.15"
 num_cpus = "1"
 num-traits = "0.2"

@@ -37,6 +37,8 @@ pub struct BerTest {
     statistics: Vec<Statistics>,
     max_iterations: usize,
     max_frame_errors: u64,
+    reporter: Option<Reporter>,
+    last_reported: Instant,
 }
 
 #[derive(Debug)]
@@ -100,6 +102,53 @@ pub struct Statistics {
     pub throughput_mbps: f64,
 }
 
+/// Progress reporter.
+///
+/// A reporter can optionally be supplied to the BER test on contruction in
+/// order to receive periodic messages reporting the test progress.
+#[derive(Debug, Clone)]
+pub struct Reporter {
+    /// Sender element of a channel used to send the reports.
+    pub tx: Sender<Report>,
+    /// Reporting interval.
+    pub interval: Duration,
+}
+
+/// BER test progress report.
+///
+/// Progress reports are optionally sent out periodically by the BER test. These
+/// can be used to update a UI to show the progress.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Report {
+    /// Statistics for the current Eb/N0 being tested.
+    ///
+    /// This is sent periodically, and also when the Eb/N0 is finished.
+    Statistics(Statistics),
+    /// The complete BER test has finished.
+    ///
+    /// This is sent when all the Eb/N0 cases have been done.
+    Finished,
+}
+
+macro_rules! report {
+    ($self:expr, $current_statistics:expr, $ebn0_db:expr, $final:expr) => {
+        if let Some(reporter) = $self.reporter.as_ref() {
+            let now = Instant::now();
+            if $final || $self.last_reported + reporter.interval < now {
+                reporter
+                    .tx
+                    .send(Report::Statistics(Statistics::from_current(
+                        &$current_statistics,
+                        $ebn0_db,
+                        $self.k,
+                    )))
+                    .unwrap();
+                $self.last_reported = now;
+            }
+        }
+    };
+}
+
 impl BerTest {
     /// Creates a new BER test.
     ///
@@ -107,16 +156,18 @@ impl BerTest {
     /// `h`, an optional puncturing pattern (which uses the semantics of
     /// [`Puncturer`]), the maximum number of frame errors at which to stop the
     /// simulation for each Eb/N0, the maximum number of iterations of the LDPC
-    /// decoder, and a list of Eb/N0's in dB units.
+    /// decoder, a list of Eb/N0's in dB units, and an optional [`Reporter`] to
+    /// send messages about the test progress.
     ///
     /// This function only defines the BER test. To run it it is necessary to
-    /// call the [`run`] method.
+    /// call the [`BerTest::run`] method.
     pub fn new(
         h: SparseMatrix,
         puncturing_pattern: Option<&[bool]>,
         max_frame_errors: u64,
         max_iterations: usize,
         ebn0s_db: &[f32],
+        reporter: Option<Reporter>,
     ) -> Result<BerTest, Error> {
         let k = h.num_cols() - h.num_rows();
         let n = h.num_cols();
@@ -139,6 +190,8 @@ impl BerTest {
             statistics: Vec::with_capacity(ebn0s_db.len()),
             max_iterations,
             max_frame_errors,
+            reporter,
+            last_reported: Instant::now(),
         })
     }
 
@@ -147,6 +200,16 @@ impl BerTest {
     /// This function runs the BER test until completion. It returns a list of
     /// statistics for each Eb/N0, or an error.
     pub fn run(mut self) -> Result<Vec<Statistics>, Box<dyn std::error::Error>> {
+        let ret = self.do_run();
+        if let Some(reporter) = self.reporter.as_ref() {
+            reporter.tx.send(Report::Finished).unwrap();
+        }
+        ret?;
+        Ok(self.statistics)
+    }
+
+    fn do_run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.last_reported = Instant::now();
         for &ebn0_db in &self.ebn0s_db {
             let ebn0 = 10.0_f64.powf(0.1 * f64::from(ebn0_db));
             let esn0 = self.rate * ebn0;
@@ -171,7 +234,9 @@ impl BerTest {
                     }
                     Err(()) => break,
                 }
+                report!(self, current_statistics, ebn0_db, false);
             }
+            report!(self, current_statistics, ebn0_db, true);
 
             for (_, terminate_tx) in workers.iter() {
                 // we don't care if this fails because the worker has terminated
@@ -179,13 +244,14 @@ impl BerTest {
                 let _ = terminate_tx.send(());
             }
 
+            let mut join_error = None;
             for (handle, _) in workers.into_iter() {
-                // This cannot be written with the question mark because the
-                // error isn't Sized.
-                #[allow(clippy::question_mark)]
                 if let Err(e) = handle.join().unwrap() {
-                    return Err(e);
+                    join_error = Some(e);
                 }
+            }
+            if let Some(e) = join_error {
+                return Err(e);
             }
 
             self.statistics.push(Statistics::from_current(
@@ -194,7 +260,7 @@ impl BerTest {
                 self.k,
             ));
         }
-        Ok(self.statistics)
+        Ok(())
     }
 
     fn make_worker(
