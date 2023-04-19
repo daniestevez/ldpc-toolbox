@@ -74,3 +74,15 @@ impl std::str::FromStr for DecoderImplementation {
         })
     }
 }
+
+impl std::fmt::Display for DecoderImplementation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match self {
+                DecoderImplementation::Phif64 => "Phif64",
+            }
+        )
+    }
+}

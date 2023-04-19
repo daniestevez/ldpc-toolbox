@@ -62,8 +62,6 @@ impl Run for Args {
             tx: report_tx,
             interval: Duration::from_millis(500),
         };
-        let progress = Progress::new(report_rx);
-        let progress = std::thread::spawn(move || progress.run());
         let test = BerTest::new(
             h,
             self.decoder,
@@ -73,14 +71,41 @@ impl Run for Args {
             &ebn0s,
             Some(reporter),
         )?;
-        let stats = test.run()?;
+        self.print_details(&test);
+        let progress = Progress::new(report_rx);
+        let progress = std::thread::spawn(move || progress.run());
+        test.run()?;
         // This block cannot actually be written with the ? operator
         #[allow(clippy::question_mark)]
         if let Err(e) = progress.join().unwrap() {
             return Err(e);
         }
-        println!("{:?}", stats);
         Ok(())
+    }
+}
+
+impl Args {
+    fn print_details(&self, test: &BerTest) {
+        println!("BER TEST PARAMETERS");
+        println!("-------------------");
+        println!("Simulation:");
+        println!(" - Minimum Eb/N0: {:.2} dB", self.min_ebn0);
+        println!(" - Maximum Eb/N0: {:.2} dB", self.max_ebn0);
+        println!(" - Eb/N0 step: {:.2} dB", self.step_ebn0);
+        println!(" - Number of frame errors: {}", self.frame_errors);
+        println!("LDPC code:");
+        println!(" - alist: {}", self.alist);
+        if let Some(puncturing) = self.puncturing.as_ref() {
+            println!(" - Puncturing pattern: {puncturing}");
+        }
+        println!(" - Information bits (k): {}", test.k());
+        println!(" - Codeword size (N_cw): {}", test.n_cw());
+        println!(" - Frame size (N): {}", test.n());
+        println!(" - Code rate: {:.3}", test.rate());
+        println!("LDPC decoder:");
+        println!(" - Implementation: {}", self.decoder);
+        println!(" - Maximum iterations: {}", self.max_iter);
+        println!();
     }
 }
 

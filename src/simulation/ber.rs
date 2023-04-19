@@ -30,6 +30,8 @@ pub struct BerTest {
     h: SparseMatrix,
     num_workers: usize,
     k: usize,
+    n: usize,
+    n_cw: usize,
     rate: f64,
     encoder: Encoder,
     puncturer: Option<Puncturer>,
@@ -172,18 +174,21 @@ impl BerTest {
         reporter: Option<Reporter>,
     ) -> Result<BerTest, Error> {
         let k = h.num_cols() - h.num_rows();
-        let n = h.num_cols();
+        let n_cw = h.num_cols();
         let puncturer = puncturing_pattern.map(Puncturer::new);
         let puncturer_rate = if let Some(p) = puncturer.as_ref() {
             p.rate()
         } else {
             1.0
         };
-        let rate = puncturer_rate * k as f64 / n as f64;
+        let n = (n_cw as f64 / puncturer_rate).round() as usize;
+        let rate = k as f64 / n as f64;
         Ok(BerTest {
             decoder_implementation,
             num_workers: num_cpus::get(),
             k,
+            n,
+            n_cw,
             rate,
             encoder: Encoder::from_h(&h)?,
             h,
@@ -209,6 +214,30 @@ impl BerTest {
         }
         ret?;
         Ok(self.statistics)
+    }
+
+    /// Returns the frame size of the code.
+    ///
+    /// This corresponds to the frame size after puncturing.
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    /// Returns the codeword size of the code.
+    ///
+    /// This corresponds to the codeword size before puncturing.
+    pub fn n_cw(&self) -> usize {
+        self.n_cw
+    }
+
+    /// Returns the number of information bits of the code.
+    pub fn k(&self) -> usize {
+        self.k
+    }
+
+    /// Returns the rate of the code.
+    pub fn rate(&self) -> f64 {
+        self.rate
     }
 
     fn do_run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
