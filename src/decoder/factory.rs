@@ -5,7 +5,7 @@
 //! LdpcDecoder>`, using the trait [`LdpcDecoder`].
 
 use super::{
-    arithmetic::{DecoderArithmetic, Phif64},
+    arithmetic::{DecoderArithmetic, Phif32, Phif64},
     Decoder, DecoderOutput,
 };
 use crate::sparse::SparseMatrix;
@@ -50,39 +50,56 @@ impl<A: DecoderArithmetic> LdpcDecoder for Decoder<A> {
 pub enum DecoderImplementation {
     /// The [`Phif64`] implementation, using `f64` and the involution `phi(x)`.
     Phif64,
+    /// The [`Phif32`] implementation, using `f32` and the involution `phi(x)`.
+    Phif32,
 }
 
-impl DecoderImplementation {
-    /// Builds and LDPC decoder.
-    ///
-    /// Given a parity check matrix, this function builds an LDPC decoder
-    /// corresponding to this decoder implementation.
-    pub fn build_decoder(&self, h: SparseMatrix) -> Box<dyn LdpcDecoder> {
-        match self {
-            DecoderImplementation::Phif64 => Box::new(Decoder::new(h, Phif64::new())),
+macro_rules! impl_decoderimplementation {
+    ($($var:path, $arith:ident, $text:expr);+;) => {
+        impl DecoderImplementation {
+            /// Builds and LDPC decoder.
+            ///
+            /// Given a parity check matrix, this function builds an LDPC decoder
+            /// corresponding to this decoder implementation.
+            pub fn build_decoder(&self, h: SparseMatrix) -> Box<dyn LdpcDecoder> {
+                match self {
+                    $(
+                        $var => Box::new(Decoder::new(h, $arith::new())),
+                    )+
+                }
+            }
+        }
+
+        impl std::str::FromStr for DecoderImplementation {
+            type Err = &'static str;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(match s {
+                    $(
+                        $text => $var,
+                    )+
+                    _ => return Err("invalid decoder implementation"),
+                })
+            }
+        }
+
+        impl std::fmt::Display for DecoderImplementation {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+                write!(
+                    f,
+                    "{}",
+                    match self {
+                        $(
+                            $var => $text,
+                        )+
+                    }
+                )
+            }
         }
     }
 }
 
-impl std::str::FromStr for DecoderImplementation {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "Phif64" => DecoderImplementation::Phif64,
-            _ => return Err("invalid decoder implementation"),
-        })
-    }
-}
-
-impl std::fmt::Display for DecoderImplementation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(
-            f,
-            "{}",
-            match self {
-                DecoderImplementation::Phif64 => "Phif64",
-            }
-        )
-    }
-}
+impl_decoderimplementation!(
+    DecoderImplementation::Phif64, Phif64, "Phif64";
+    DecoderImplementation::Phif32, Phif32, "Phif32";
+);

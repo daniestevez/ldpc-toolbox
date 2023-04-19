@@ -87,102 +87,109 @@ pub trait DecoderArithmetic: std::fmt::Debug + Send {
         F: FnMut(SentMessage<Self::VarMessage>);
 }
 
-/// LDPC decoder arithmetic with `f64` and `phi(x)` involution.
-///
-/// This is a [`DecoderArithmetic`] that uses `f64` to represent the LLRs and
-/// messages and computes the check node messages using the involution `phi(x) =
-/// -log(tanh(x/2))`.
-#[derive(Debug, Clone, Default)]
-pub struct Phif64 {
-    phis: Vec<f64>,
-}
-
-impl Phif64 {
-    /// Creates a new [`Phif64`] decoder arithmetic object.
-    pub fn new() -> Phif64 {
-        Phif64::default()
-    }
-}
-
-impl Phif64 {
-    fn phi(x: f64) -> f64 {
-        // Ensure that x is not zero. Otherwise the output will be +inf, which gives
-        // problems when computing (+inf) - (+inf).
-        let x = x.max(1e-30);
-        -((0.5 * x).tanh().ln())
-    }
-}
-
-impl DecoderArithmetic for Phif64 {
-    type Llr = f64;
-    type CheckMessage = f64;
-    type VarMessage = f64;
-
-    fn input_llr_quantize(&self, llr: f32) -> f64 {
-        f64::from(llr)
-    }
-
-    fn llr_hard_decision(&self, llr: f64) -> bool {
-        llr <= 0.0
-    }
-
-    fn llr_to_var_message(&self, llr: f64) -> f64 {
-        llr
-    }
-
-    fn send_check_messages<F>(&mut self, var_messages: &[Message<f64>], mut send: F)
-    where
-        F: FnMut(SentMessage<f64>),
-    {
-        // Compute combination of all variable messages
-        let mut sign: u32 = 0;
-        let mut sum = 0.0;
-        if self.phis.len() < var_messages.len() {
-            self.phis.resize(var_messages.len(), 0.0);
+macro_rules! impl_phif {
+    ($ty:ident, $f:ty, $min_x:expr) => {
+        /// LDPC decoder arithmetic with `$f` and `phi(x)` involution.
+        ///
+        /// This is a [`DecoderArithmetic`] that uses `$f` to represent the LLRs and
+        /// messages and computes the check node messages using the involution `phi(x) =
+        /// -log(tanh(x/2))`.
+        #[derive(Debug, Clone, Default)]
+        pub struct $ty {
+            phis: Vec<$f>,
         }
-        for (msg, phi) in var_messages.iter().zip(self.phis.iter_mut()) {
-            let x = msg.value;
-            let phi_x = Self::phi(x.abs());
-            *phi = phi_x;
-            sum += phi_x;
-            if x < 0.0 {
-                sign ^= 1;
+
+        impl $ty {
+            /// Creates a new [`$ty`] decoder arithmetic object.
+            pub fn new() -> $ty {
+                <$ty>::default()
             }
         }
 
-        // Exclude the contribution of each variable to generate message for
-        // that variable
-        for (msg, phi) in var_messages.iter().zip(self.phis.iter()) {
-            let x = msg.value;
-            let y = Self::phi(sum - phi);
-            let s = if x < 0.0 { sign ^ 1 } else { sign };
-            let val = if s == 0 { y } else { -y };
-            send(SentMessage {
-                dest: msg.source,
-                value: val,
-            });
+        impl $ty {
+            fn phi(x: $f) -> $f {
+                // Ensure that x is not zero. Otherwise the output will be +inf, which gives
+                // problems when computing (+inf) - (+inf).
+                let x = x.max($min_x);
+                -((0.5 * x).tanh().ln())
+            }
         }
-    }
 
-    fn send_var_messages<F>(
-        &mut self,
-        input_llr: f64,
-        check_messages: &[Message<f64>],
-        mut send: F,
-    ) -> f64
-    where
-        F: FnMut(SentMessage<f64>),
-    {
-        // Compute new LLR
-        let llr = input_llr + check_messages.iter().map(|m| m.value).sum::<f64>();
-        // Exclude the contribution of each check node to generate message for
-        // that check node
-        for msg in check_messages.iter() {
-            send(SentMessage {
-                dest: msg.source,
-                value: llr - msg.value,
-            });
+        impl DecoderArithmetic for $ty {
+            type Llr = $f;
+            type CheckMessage = $f;
+            type VarMessage = $f;
+
+            fn input_llr_quantize(&self, llr: f32) -> $f {
+                <$f>::from(llr)
+            }
+
+            fn llr_hard_decision(&self, llr: $f) -> bool {
+                llr <= 0.0
+            }
+
+            fn llr_to_var_message(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                // Compute combination of all variable messages
+                let mut sign: u32 = 0;
+                let mut sum = 0.0;
+                if self.phis.len() < var_messages.len() {
+                    self.phis.resize(var_messages.len(), 0.0);
+                }
+                for (msg, phi) in var_messages.iter().zip(self.phis.iter_mut()) {
+                    let x = msg.value;
+                    let phi_x = Self::phi(x.abs());
+                    *phi = phi_x;
+                    sum += phi_x;
+                    if x < 0.0 {
+                        sign ^= 1;
+                    }
+                }
+
+                // Exclude the contribution of each variable to generate message for
+                // that variable
+                for (msg, phi) in var_messages.iter().zip(self.phis.iter()) {
+                    let x = msg.value;
+                    let y = Self::phi(sum - phi);
+                    let s = if x < 0.0 { sign ^ 1 } else { sign };
+                    let val = if s == 0 { y } else { -y };
+                    send(SentMessage {
+                        dest: msg.source,
+                        value: val,
+                    });
+                }
+            }
+
+            fn send_var_messages<F>(
+                &mut self,
+                input_llr: $f,
+                check_messages: &[Message<$f>],
+                mut send: F,
+            ) -> $f
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                // Compute new LLR
+                let llr = input_llr + check_messages.iter().map(|m| m.value).sum::<$f>();
+                // Exclude the contribution of each check node to generate message for
+                // that check node
+                for msg in check_messages.iter() {
+                    send(SentMessage {
+                        dest: msg.source,
+                        value: llr - msg.value,
+                    });
+                }
+                llr
+            }
         }
-        llr
-    }
+    };
 }
+
+impl_phif!(Phif64, f64, 1e-30);
+impl_phif!(Phif32, f32, 1e-30);
