@@ -174,13 +174,13 @@ impl Progress {
     }
 
     fn format_header() -> &'static str {
-        "  Eb/N0 |   Frames | Bit errs | Frame er | False de |     BER |     FER | Throughp | Elapsed\n\
-         --------|----------|----------|----------|----------|---------|---------|----------|----------"
+        "  Eb/N0 |   Frames | Bit errs | Frame er | False de |     BER |     FER | Avg iter | Avg corr | Throughp | Elapsed\n\
+         --------|----------|----------|----------|----------|---------|---------|----------|----------|----------|----------"
     }
 
     fn format_progress(stats: &Statistics) -> String {
         format!(
-            "{:7.2} | {:8} | {:8} | {:8} | {:8} | {:7.2e} | {:7.2e} | {:8.3} | {}",
+            "{:7.2} | {:8} | {:8} | {:8} | {:8} | {:7.2e} | {:7.2e} | {:8.1} | {:8.1} | {:8.3} | {}",
             stats.ebn0_db,
             stats.num_frames,
             stats.bit_errors,
@@ -188,6 +188,8 @@ impl Progress {
             stats.false_decodes,
             stats.ber,
             stats.fer,
+            stats.average_iterations,
+            stats.average_iterations_correct,
             stats.throughput_mbps,
             humantime::format_duration(Duration::from_secs(stats.elapsed.as_secs()))
         )

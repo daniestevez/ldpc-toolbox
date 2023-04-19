@@ -63,6 +63,7 @@ struct WorkerResultOk {
     bit_errors: u64,
     frame_error: bool,
     false_decode: bool,
+    iterations: u64,
 }
 
 type WorkerResult = Result<WorkerResultOk, ()>;
@@ -73,6 +74,8 @@ struct CurrentStatistics {
     bit_errors: u64,
     frame_errors: u64,
     false_decodes: u64,
+    total_iterations: u64,
+    correct_iterations: u64,
     start: Instant,
 }
 
@@ -90,6 +93,10 @@ pub struct Statistics {
     pub bit_errors: u64,
     /// Number of frame errors.
     pub frame_errors: u64,
+    /// Total number of iterations.
+    pub total_iterations: u64,
+    /// Sum of iterations in correct frames.
+    pub correct_iterations: u64,
     /// Number of frames falsely decoded.
     ///
     /// This are frames for which the decoder converged to a valid codeword, but
@@ -99,6 +106,10 @@ pub struct Statistics {
     pub ber: f64,
     /// Frame error rate.
     pub fer: f64,
+    /// Average iterations per frame.
+    pub average_iterations: f64,
+    /// Average iterations per correct frame.
+    pub average_iterations_correct: f64,
     /// Elapsed time for this test case.
     pub elapsed: Duration,
     /// Throughput in Mbps (referred to information bits).
@@ -262,6 +273,10 @@ impl BerTest {
                         current_statistics.bit_errors += result.bit_errors;
                         current_statistics.frame_errors += u64::from(result.frame_error);
                         current_statistics.false_decodes += u64::from(result.false_decode);
+                        current_statistics.total_iterations += result.iterations;
+                        if !result.frame_error {
+                            current_statistics.correct_iterations += result.iterations;
+                        }
                         current_statistics.num_frames += 1;
                     }
                     Err(()) => break,
@@ -356,10 +371,11 @@ impl Worker {
             None => llrs_demod,
         };
 
-        let (decoded, success) = match self.decoder.decode(&llrs_decoder, self.max_iterations) {
-            Ok(output) => (output.codeword, true),
-            Err(output) => (output.codeword, false),
-        };
+        let (decoded, iterations, success) =
+            match self.decoder.decode(&llrs_decoder, self.max_iterations) {
+                Ok(output) => (output.codeword, output.iterations, true),
+                Err(output) => (output.codeword, output.iterations, false),
+            };
         // Count only bit errors in the systematic part of the codeword
         let bit_errors = message
             .iter()
@@ -372,6 +388,7 @@ impl Worker {
             bit_errors,
             frame_error,
             false_decode,
+            iterations: iterations as u64,
         })
     }
 
@@ -397,6 +414,8 @@ impl CurrentStatistics {
             bit_errors: 0,
             frame_errors: 0,
             false_decodes: 0,
+            total_iterations: 0,
+            correct_iterations: 0,
             start: Instant::now(),
         }
     }
@@ -417,8 +436,13 @@ impl Statistics {
             bit_errors: stats.bit_errors,
             frame_errors: stats.frame_errors,
             false_decodes: stats.false_decodes,
+            total_iterations: stats.total_iterations,
+            correct_iterations: stats.correct_iterations,
             ber: stats.bit_errors as f64 / (k as f64 * stats.num_frames as f64),
             fer: stats.frame_errors as f64 / stats.num_frames as f64,
+            average_iterations: stats.total_iterations as f64 / stats.num_frames as f64,
+            average_iterations_correct: stats.correct_iterations as f64
+                / (stats.num_frames - stats.frame_errors) as f64,
             elapsed,
             throughput_mbps: 1e-6 * (k as f64 * stats.num_frames as f64) / elapsed.as_secs_f64(),
         }
