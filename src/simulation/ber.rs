@@ -8,7 +8,7 @@ use super::{
     puncturing::Puncturer,
 };
 use crate::{
-    decoder::Decoder,
+    decoder::factory::{DecoderImplementation, LdpcDecoder},
     encoder::{Encoder, Error},
     gf2::GF2,
     sparse::SparseMatrix,
@@ -26,13 +26,14 @@ use std::{
 /// This struct is used to configure and run a BER test.
 #[derive(Debug)]
 pub struct BerTest {
+    decoder_implementation: DecoderImplementation,
+    h: SparseMatrix,
     num_workers: usize,
     k: usize,
     rate: f64,
     encoder: Encoder,
     puncturer: Option<Puncturer>,
     modulator: BpskModulator,
-    decoder: Decoder,
     ebn0s_db: Vec<f32>,
     statistics: Vec<Statistics>,
     max_iterations: usize,
@@ -51,7 +52,7 @@ struct Worker {
     modulator: BpskModulator,
     channel: AwgnChannel,
     demodulator: BpskDemodulator,
-    decoder: Decoder,
+    decoder: Box<dyn LdpcDecoder>,
     max_iterations: usize,
 }
 
@@ -163,6 +164,7 @@ impl BerTest {
     /// call the [`BerTest::run`] method.
     pub fn new(
         h: SparseMatrix,
+        decoder_implementation: DecoderImplementation,
         puncturing_pattern: Option<&[bool]>,
         max_frame_errors: u64,
         max_iterations: usize,
@@ -179,13 +181,14 @@ impl BerTest {
         };
         let rate = puncturer_rate * k as f64 / n as f64;
         Ok(BerTest {
+            decoder_implementation,
             num_workers: num_cpus::get(),
             k,
             rate,
             encoder: Encoder::from_h(&h)?,
+            h,
             puncturer,
             modulator: BpskModulator::new(),
-            decoder: Decoder::new(h),
             ebn0s_db: ebn0s_db.to_owned(),
             statistics: Vec::with_capacity(ebn0s_db.len()),
             max_iterations,
@@ -279,7 +282,7 @@ impl BerTest {
                 modulator: self.modulator.clone(),
                 channel: AwgnChannel::new(noise_sigma),
                 demodulator: BpskDemodulator::new(noise_sigma),
-                decoder: self.decoder.clone(),
+                decoder: self.decoder_implementation.build_decoder(self.h.clone()),
                 max_iterations: self.max_iterations,
             },
             terminate_tx,
@@ -325,8 +328,8 @@ impl Worker {
         };
 
         let (decoded, success) = match self.decoder.decode(&llrs_decoder, self.max_iterations) {
-            Ok((d, _)) => (d, true),
-            Err(d) => (d, false),
+            Ok(output) => (output.codeword, true),
+            Err(output) => (output.codeword, false),
         };
         // Count only bit errors in the systematic part of the codeword
         let bit_errors = message

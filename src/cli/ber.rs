@@ -4,6 +4,7 @@
 
 use crate::{
     cli::*,
+    decoder::factory::DecoderImplementation,
     simulation::ber::{BerTest, Report, Reporter, Statistics},
     sparse::SparseMatrix,
 };
@@ -21,6 +22,9 @@ use std::{
 pub struct Args {
     /// alist file for the code
     alist: String,
+    /// Decoder implementation
+    #[structopt(long, default_value = "Phif64")]
+    decoder: DecoderImplementation,
     /// Puncturing pattern (format "1,1,1,0")
     #[structopt(long)]
     puncturing: Option<String>,
@@ -62,6 +66,7 @@ impl Run for Args {
         let progress = std::thread::spawn(move || progress.run());
         let test = BerTest::new(
             h,
+            self.decoder,
             puncturing_pattern.as_ref().map(|v| &v[..]),
             self.frame_errors,
             self.max_iter,

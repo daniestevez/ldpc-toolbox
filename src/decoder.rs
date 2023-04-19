@@ -5,22 +5,68 @@
 //! details about their numerical algorithms and data types.
 
 use crate::sparse::SparseMatrix;
-use num_traits::Zero;
+
+pub mod arithmetic;
+use arithmetic::DecoderArithmetic;
+
+pub mod factory;
 
 /// LDPC belief propagation decoder.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Decoder {
+pub struct Decoder<A: DecoderArithmetic> {
+    arithmetic: A,
     h: SparseMatrix,
-    input_llrs: Box<[f64]>,
-    output_llrs: Box<[f64]>,
-    check_messages: Messages<f64>,
-    variable_messages: Messages<f64>,
+    input_llrs: Box<[A::Llr]>,
+    output_llrs: Box<[A::Llr]>,
+    check_messages: Messages<A::CheckMessage>,
+    variable_messages: Messages<A::VarMessage>,
 }
 
+/// LDPC decoder output.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct DecoderOutput {
+    /// Decoded codeword.
+    ///
+    /// Contains the hard decision bits of the decoded codeword.
+    pub codeword: Vec<u8>,
+    /// Number of iterations.
+    ///
+    /// Number of iterations used in decoding.
+    pub iterations: usize,
+}
+
+/// LDPC decoder message.
+///
+/// This represents a message used by the belief propagation decoder. It is used
+/// for messages received by the nodes.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Hash)]
-struct Message<T> {
-    source: usize,
-    value: T,
+pub struct Message<T> {
+    /// Message source.
+    ///
+    /// Contains the index of the variable node or check node that sent the
+    /// message.
+    pub source: usize,
+    /// Value.
+    ///
+    /// Contains the value of the message.
+    pub value: T,
+}
+
+/// LDPC decoder outgoing message.
+///
+/// This represents a message used by the belief propagation decoder. It is used
+/// for messages sent by the nodes.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default, Hash)]
+pub struct SentMessage<T> {
+    /// Message destination.
+    ///
+    /// Contains the index of the variable node or check node to which the
+    /// message is addressed.
+    pub dest: usize,
+    /// Value.
+    ///
+    /// Contains the value of the message.
+    pub value: T,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default, Hash)]
@@ -28,16 +74,17 @@ struct Messages<T> {
     per_destination: Box<[Box<[Message<T>]>]>,
 }
 
-impl Decoder {
+impl<A: DecoderArithmetic> Decoder<A> {
     /// Creates a new LDPC decoder.
     ///
     /// The parameter `h` indicates the parity check matrix.
-    pub fn new(h: SparseMatrix) -> Decoder {
-        let input_llrs = vec![0.0; h.num_cols()].into_boxed_slice();
+    pub fn new(h: SparseMatrix, arithmetic: A) -> Self {
+        let input_llrs = vec![Default::default(); h.num_cols()].into_boxed_slice();
         let output_llrs = input_llrs.clone();
         let check_messages = Messages::from_iter((0..h.num_cols()).map(|c| h.iter_col(c)));
         let variable_messages = Messages::from_iter((0..h.num_rows()).map(|r| h.iter_row(r)));
         Decoder {
+            arithmetic,
             h,
             input_llrs,
             output_llrs,
@@ -53,80 +100,67 @@ impl Decoder {
     /// returns an `Ok` containing the (hard decision) on the decoded codeword
     /// and the number of iterations used in decoding. If decoding is not
     /// successful, the function returns an `Err` containing the hard decision
-    /// on the final decoder LLRs (which still has some bit errors).
+    /// on the final decoder LLRs (which still has some bit errors) and the
+    /// number of iterations used in decoding (which is equal to
+    /// `max_iterations`).
     pub fn decode(
         &mut self,
         llrs: &[f32],
         max_iterations: usize,
-    ) -> Result<(Vec<u8>, usize), Vec<u8>> {
+    ) -> Result<DecoderOutput, DecoderOutput> {
         assert_eq!(llrs.len(), self.input_llrs.len());
-        if self.check_llrs(llrs) {
+        let input_llrs_hard_decision = |x| x <= 0.0;
+        if self.check_llrs(llrs, input_llrs_hard_decision) {
             // No bit errors case
-            return Ok((Self::hard_decision(llrs), 0));
+            return Ok(DecoderOutput {
+                codeword: Self::hard_decisions(llrs, input_llrs_hard_decision),
+                iterations: 0,
+            });
         }
         self.initialize(llrs);
         for iteration in 1..=max_iterations {
             self.process_check_nodes();
             self.process_variable_nodes();
-            if self.check_llrs(&self.output_llrs) {
+            if self.check_llrs(&self.output_llrs, |x| self.arithmetic.llr_hard_decision(x)) {
                 // Decode succeeded
-                return Ok((Self::hard_decision(&self.output_llrs), iteration));
+                return Ok(DecoderOutput {
+                    codeword: Self::hard_decisions(&self.output_llrs, |x| {
+                        self.arithmetic.llr_hard_decision(x)
+                    }),
+                    iterations: iteration,
+                });
             }
         }
         // Decode failed
-        Err(Self::hard_decision(&self.output_llrs))
+        Err(DecoderOutput {
+            codeword: Self::hard_decisions(&self.output_llrs, |x| {
+                self.arithmetic.llr_hard_decision(x)
+            }),
+            iterations: max_iterations,
+        })
     }
 
     fn initialize(&mut self, llrs: &[f32]) {
         for (x, &y) in self.input_llrs.iter_mut().zip(llrs.iter()) {
-            *x = f64::from(y)
+            *x = self.arithmetic.input_llr_quantize(y)
         }
 
         // First variable messages use only input LLRs
         for (v, &llr) in self.input_llrs.iter().enumerate() {
             for &c in self.h.iter_col(v) {
-                self.variable_messages.send(v, c, llr);
+                self.variable_messages
+                    .send(v, c, self.arithmetic.llr_to_var_message(llr));
             }
         }
     }
 
     fn process_check_nodes(&mut self) {
         for (c, messages) in self.variable_messages.per_destination.iter().enumerate() {
-            for (dest, value) in Self::new_check_messages(messages) {
-                self.check_messages.send(c, dest, value)
-            }
+            self.arithmetic.send_check_messages(messages, {
+                let check_messages = &mut self.check_messages;
+                move |msg| check_messages.send(c, msg.dest, msg.value)
+            });
         }
-    }
-
-    fn new_check_messages(
-        var_messages: &[Message<f64>],
-    ) -> impl Iterator<Item = (usize, f64)> + '_ {
-        // Compute combination of all variable messages
-        let mut sign: u32 = 0;
-        let mut sum = 0.0;
-        let mut phis = Vec::with_capacity(var_messages.len());
-        for msg in var_messages.iter() {
-            let x = msg.value;
-            let phi_x = phi(x.abs());
-            sum += phi_x;
-            phis.push(phi_x);
-            if x < 0.0 {
-                sign ^= 1;
-            }
-        }
-
-        // Exclude the contribution of each variable to generate message for
-        // that variable
-        var_messages
-            .iter()
-            .zip(phis.into_iter())
-            .map(move |(msg, phi_x)| {
-                let x = msg.value;
-                let y = phi(sum - phi_x);
-                let s = if x < 0.0 { sign ^ 1 } else { sign };
-                let val = if s == 0 { y } else { -y };
-                (msg.source, val)
-            })
     }
 
     fn process_variable_nodes(&mut self) {
@@ -138,58 +172,38 @@ impl Decoder {
             .zip(self.output_llrs.iter_mut())
             .zip(self.input_llrs.iter())
         {
-            let (new_llr, new_messages) = Self::new_variable_messages(input_llr, messages);
-            {
-                *output_llr = new_llr;
-                for (dest, value) in new_messages {
-                    self.variable_messages.send(v, dest, value);
-                }
-            }
+            *output_llr = self.arithmetic.send_var_messages(input_llr, messages, {
+                let var_messages = &mut self.variable_messages;
+                move |msg| var_messages.send(v, msg.dest, msg.value)
+            });
         }
     }
 
-    fn new_variable_messages(
-        input_llr: f64,
-        chk_messages: &[Message<f64>],
-    ) -> (f64, impl Iterator<Item = (usize, f64)> + '_) {
-        // Compute new LLR
-        let llr = input_llr + chk_messages.iter().map(|m| m.value).sum::<f64>();
-        // Exclude the contribution of each check node to generate message for
-        // that check node
-        let new_messages = chk_messages.iter().map(move |m| (m.source, llr - m.value));
-        (llr, new_messages)
-    }
-
-    fn check_llrs<T>(&self, llrs: &[T]) -> bool
+    fn check_llrs<T, F>(&self, llrs: &[T], hard_decision: F) -> bool
     where
-        T: std::cmp::PartialOrd<T> + Zero,
+        T: Copy,
+        F: Fn(T) -> bool,
     {
         // Check if hard decision on LLRs satisfies the parity check equations
         !(0..self.h.num_rows()).any(|r| {
             self.h
                 .iter_row(r)
-                .filter(|&&c| llrs[c] <= T::zero())
+                .filter(|&&c| hard_decision(llrs[c]))
                 .count()
                 % 2
                 == 1
         })
     }
 
-    fn hard_decision<T>(llrs: &[T]) -> Vec<u8>
+    fn hard_decisions<T, F>(llrs: &[T], hard_decision: F) -> Vec<u8>
     where
-        T: std::cmp::PartialOrd<T> + Zero,
+        T: Copy,
+        F: Fn(T) -> bool,
     {
         llrs.iter()
-            .map(|llr| if *llr <= T::zero() { 1 } else { 0 })
+            .map(|&llr| u8::from(hard_decision(llr)))
             .collect()
     }
-}
-
-fn phi(x: f64) -> f64 {
-    // Ensure that x is not zero. Otherwise the output will be +inf, which gives
-    // problems when computing (+inf) - (+inf).
-    let x = x.max(1e-30);
-    -((0.5 * x).tanh().ln())
 }
 
 impl<T: Default> Messages<T> {
@@ -225,16 +239,17 @@ impl<T: Default> Messages<T> {
 
 #[cfg(test)]
 mod test {
+    use super::arithmetic::Phif64;
     use super::*;
 
-    fn test_decoder() -> Decoder {
+    fn test_decoder() -> Decoder<Phif64> {
         // Example 2.5 in Sarah J. Johnson - Iterative Error Correction
         let mut h = SparseMatrix::new(4, 6);
         h.insert_row(0, [0, 1, 3].iter());
         h.insert_row(1, [1, 2, 4].iter());
         h.insert_row(2, [0, 4, 5].iter());
         h.insert_row(3, [2, 3, 5].iter());
-        Decoder::new(h)
+        Decoder::new(h, Phif64::new())
     }
 
     // These are based on example 2.23 in Sarah J. Johnson - Iterative Error Correction
