@@ -87,6 +87,25 @@ pub trait DecoderArithmetic: std::fmt::Debug + Send {
         F: FnMut(SentMessage<Self::VarMessage>);
 }
 
+// The usual variable message update rule, without any clipping.
+fn send_var_messages_no_clip<T, F>(input_llr: T, check_messages: &[Message<T>], mut send: F) -> T
+where
+    T: std::iter::Sum + std::ops::Add<Output = T> + std::ops::Sub<Output = T> + Copy,
+    F: FnMut(SentMessage<T>),
+{
+    // Compute new LLR
+    let llr: T = input_llr + check_messages.iter().map(|m| m.value).sum::<T>();
+    // Exclude the contribution of each check node to generate message for
+    // that check node
+    for msg in check_messages.iter() {
+        send(SentMessage {
+            dest: msg.source,
+            value: llr - msg.value,
+        });
+    }
+    llr
+}
+
 macro_rules! impl_phif {
     ($ty:ident, $f:ty, $min_x:expr) => {
         /// LDPC decoder arithmetic with `$f` and `phi(x)` involution.
@@ -170,22 +189,12 @@ macro_rules! impl_phif {
                 &mut self,
                 input_llr: $f,
                 check_messages: &[Message<$f>],
-                mut send: F,
+                send: F,
             ) -> $f
             where
                 F: FnMut(SentMessage<$f>),
             {
-                // Compute new LLR
-                let llr = input_llr + check_messages.iter().map(|m| m.value).sum::<$f>();
-                // Exclude the contribution of each check node to generate message for
-                // that check node
-                for msg in check_messages.iter() {
-                    send(SentMessage {
-                        dest: msg.source,
-                        value: llr - msg.value,
-                    });
-                }
-                llr
+                send_var_messages_no_clip(input_llr, check_messages, send)
             }
         }
     };
@@ -193,3 +202,94 @@ macro_rules! impl_phif {
 
 impl_phif!(Phif64, f64, 1e-30);
 impl_phif!(Phif32, f32, 1e-30);
+
+macro_rules! impl_tanhf {
+    ($ty:ident, $f:ty, $tanh_clamp:expr) => {
+        /// LDPC decoder arithmetic with `$f` and `2 * atanh(\Prod tanh(x/2)` rule.
+        ///
+        /// This is a [`DecoderArithmetic`] that uses `$f` to represent the LLRs
+        /// and messages and computes the check node messages using the usual
+        /// tanh product rule.
+        #[derive(Debug, Clone, Default)]
+        pub struct $ty {
+            tanhs: Vec<$f>,
+        }
+
+        impl $ty {
+            /// Creates a new [`$ty`] decoder arithmetic object.
+            pub fn new() -> $ty {
+                <$ty>::default()
+            }
+        }
+
+        impl DecoderArithmetic for $ty {
+            type Llr = $f;
+            type CheckMessage = $f;
+            type VarMessage = $f;
+
+            fn input_llr_quantize(&self, llr: f32) -> $f {
+                <$f>::from(llr)
+            }
+
+            fn llr_hard_decision(&self, llr: $f) -> bool {
+                llr <= 0.0
+            }
+
+            fn llr_to_var_message(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                // Compute tanh's of all variable messages
+                if self.tanhs.len() < var_messages.len() {
+                    self.tanhs.resize(var_messages.len(), 0.0);
+                }
+                for (msg, tanh) in var_messages.iter().zip(self.tanhs.iter_mut()) {
+                    let x = msg.value;
+                    let t = (0.5 * x).clamp(-$tanh_clamp, $tanh_clamp).tanh();
+                    *tanh = t;
+                }
+
+                for exclude_msg in var_messages.iter() {
+                    // product of all the tanh's except that of exclude_msg
+                    let product = var_messages
+                        .iter()
+                        .zip(self.tanhs.iter())
+                        .filter_map(|(msg, tanh)| {
+                            if msg.source != exclude_msg.source {
+                                Some(tanh)
+                            } else {
+                                None
+                            }
+                        })
+                        .product::<$f>();
+                    send(SentMessage {
+                        dest: exclude_msg.source,
+                        value: 2.0 * product.atanh(),
+                    })
+                }
+            }
+
+            fn send_var_messages<F>(
+                &mut self,
+                input_llr: $f,
+                check_messages: &[Message<$f>],
+                send: F,
+            ) -> $f
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                send_var_messages_no_clip(input_llr, check_messages, send)
+            }
+        }
+    };
+}
+
+// For f64, tanh(19) already gives 1.0 (and we want to avoid computing
+// atanh(1.0) = inf).
+impl_tanhf!(Tanhf64, f64, 18.0);
+// For f32, tanh(10) already gives 1.0.
+impl_tanhf!(Tanhf32, f32, 9.0);

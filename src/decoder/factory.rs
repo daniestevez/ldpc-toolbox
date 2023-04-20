@@ -5,7 +5,7 @@
 //! LdpcDecoder>`, using the trait [`LdpcDecoder`].
 
 use super::{
-    arithmetic::{DecoderArithmetic, Phif32, Phif64},
+    arithmetic::{DecoderArithmetic, Phif32, Phif64, Tanhf32, Tanhf64},
     Decoder, DecoderOutput,
 };
 use crate::sparse::SparseMatrix;
@@ -52,6 +52,10 @@ pub enum DecoderImplementation {
     Phif64,
     /// The [`Phif32`] implementation, using `f32` and the involution `phi(x)`.
     Phif32,
+    /// The [`Tanhf64`] implementation, using `f64` and the tanh rule.
+    Tanhf64,
+    /// The [`Tanhf32`] implementation, using `f32` and the tanh rule.
+    Tanhf32,
 }
 
 macro_rules! impl_decoderimplementation {
@@ -102,4 +106,6 @@ macro_rules! impl_decoderimplementation {
 impl_decoderimplementation!(
     DecoderImplementation::Phif64, Phif64, "Phif64";
     DecoderImplementation::Phif32, Phif32, "Phif32";
+    DecoderImplementation::Tanhf64, Tanhf64, "Tanhf64";
+    DecoderImplementation::Tanhf32, Tanhf32, "Tanhf32";
 );
