@@ -5,6 +5,19 @@
 //! of that trait. The LDCP decoder [`Decoder`](super::Decoder) is generic over
 //! the `DecoderArithmetic` trait, so it can be used to obtain monomorphized
 //! implementations for different arithemtic rules.
+//!
+//! # References
+//!
+//! Most of the arithmetic rules implemented here are taken from:
+//!
+//! [1] Jon Hamkins, [Performance of Low-Density Parity-Check Coded Modulation](https://ipnpr.jpl.nasa.gov/progress_report/42-184/184D.pdf),
+//! IPN Progress Report 42-184, February 15, 2011.
+//!
+//! Another good resource is this book:
+//!
+//! [2] Sarah J. Johnson, Iterative Error Correction: Turbo, Low-Density
+//! Parity-Check and Repeat-Accumulate Codes. Cambridge University Press. June
+//! 2012.
 
 use super::{Message, SentMessage};
 
@@ -113,6 +126,8 @@ macro_rules! impl_phif {
         /// This is a [`DecoderArithmetic`] that uses `$f` to represent the LLRs and
         /// messages and computes the check node messages using the involution `phi(x) =
         /// -log(tanh(x/2))`.
+        ///
+        /// See (2.33) in page 68 in [2].
         #[derive(Debug, Clone, Default)]
         pub struct $ty {
             phis: Vec<$f>,
@@ -210,6 +225,8 @@ macro_rules! impl_tanhf {
         /// This is a [`DecoderArithmetic`] that uses `$f` to represent the LLRs
         /// and messages and computes the check node messages using the usual
         /// tanh product rule.
+        ///
+        /// See (33) in [1].
         #[derive(Debug, Clone, Default)]
         pub struct $ty {
             tanhs: Vec<$f>,
@@ -293,3 +310,237 @@ macro_rules! impl_tanhf {
 impl_tanhf!(Tanhf64, f64, 18.0);
 // For f32, tanh(10) already gives 1.0.
 impl_tanhf!(Tanhf32, f32, 9.0);
+
+macro_rules! impl_minstarapproxf {
+    ($ty:ident, $f:ty) => {
+        /// LDPC decoder arithmetic with `$f` and the following approximation to
+        /// the min* function:
+        ///
+        /// min*(x,y) approx = sign(xy) * [min(|x|,|y|) - log(1 + exp(-||x|-|y||))].
+        ///
+        /// This is a [`DecoderArithmetic`] that uses `$f` to represent the LLRs
+        /// and messages and computes the check node messages using an approximation
+        /// to the min* rule.
+        ///
+        /// See (35) in [1].
+        #[derive(Debug, Clone, Default)]
+        pub struct $ty {}
+
+        impl $ty {
+            /// Creates a new [`$ty`] decoder arithmetic object.
+            pub fn new() -> $ty {
+                <$ty>::default()
+            }
+        }
+
+        impl DecoderArithmetic for $ty {
+            type Llr = $f;
+            type CheckMessage = $f;
+            type VarMessage = $f;
+
+            fn input_llr_quantize(&self, llr: f32) -> $f {
+                <$f>::from(llr)
+            }
+
+            fn llr_hard_decision(&self, llr: $f) -> bool {
+                llr <= 0.0
+            }
+
+            fn llr_to_var_message(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                for exclude_msg in var_messages.iter() {
+                    let mut sign: u32 = 0;
+                    let mut minstar = None;
+                    for msg in var_messages
+                        .iter()
+                        .filter(|msg| msg.source != exclude_msg.source)
+                    {
+                        let x = msg.value;
+                        if x < 0.0 {
+                            sign ^= 1;
+                        }
+                        let x = x.abs();
+                        minstar = Some(match minstar {
+                            None => x,
+                            // We clamp the output to 0 from below because we
+                            // are doing min* of positive numbers, but since
+                            // we've thrown away a positive term in the
+                            // approximation to min*, the approximation could
+                            // come out negative.
+                            Some(y) => (x.min(y) - (-(x - y).abs()).exp().ln_1p()).max(0.0),
+                        });
+                    }
+                    let minstar =
+                        minstar.expect("only one variable message connected to check node");
+                    let minstar = if sign == 0 { minstar } else { -minstar };
+                    send(SentMessage {
+                        dest: exclude_msg.source,
+                        value: minstar,
+                    })
+                }
+            }
+
+            fn send_var_messages<F>(
+                &mut self,
+                input_llr: $f,
+                check_messages: &[Message<$f>],
+                send: F,
+            ) -> $f
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                send_var_messages_no_clip(input_llr, check_messages, send)
+            }
+        }
+    };
+}
+
+impl_minstarapproxf!(Minstarapproxf64, f64);
+impl_minstarapproxf!(Minstarapproxf32, f32);
+
+/// LDPC decoder arithmetic with 8-bit quantization and an approximation to the
+/// min* function.
+///
+/// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
+/// and messages and computes the check node messages using an approximation
+/// to the min* rule.
+///
+/// See (36) in [1].
+#[derive(Debug, Clone)]
+pub struct Minstarapproxi8 {
+    table: Box<[i8]>,
+}
+
+impl Minstarapproxi8 {
+    const QUANTIZER_C: f64 = 8.0;
+
+    /// Creates a new [`Minstarapproxi8`] decoder arithmetic object.
+    pub fn new() -> Minstarapproxi8 {
+        let table = (0..=127)
+            .map_while(|t| {
+                let x = (Self::QUANTIZER_C * (-(t as f64 / Self::QUANTIZER_C)).exp().ln_1p())
+                    .round() as i8;
+                if x > 0 {
+                    Some(x)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        Minstarapproxi8 { table }
+    }
+
+    fn lookup(&self, x: i8) -> i8 {
+        assert!(x >= 0);
+        self.table.get(x as usize).copied().unwrap_or(0)
+    }
+
+    fn clip(x: i16) -> i8 {
+        if x >= 127 {
+            127
+        } else if x <= -127 {
+            -127
+        } else {
+            x as i8
+        }
+    }
+}
+
+impl Default for Minstarapproxi8 {
+    fn default() -> Minstarapproxi8 {
+        Minstarapproxi8::new()
+    }
+}
+
+impl DecoderArithmetic for Minstarapproxi8 {
+    type Llr = i8;
+    type CheckMessage = i8;
+    type VarMessage = i8;
+
+    fn input_llr_quantize(&self, llr: f32) -> i8 {
+        let x = Self::QUANTIZER_C as f32 * llr;
+        if x >= 127.0 {
+            127
+        } else if x <= -127.0 {
+            -127
+        } else {
+            x.round() as i8
+        }
+    }
+
+    fn llr_hard_decision(&self, llr: i8) -> bool {
+        llr <= 0
+    }
+
+    fn llr_to_var_message(&self, llr: i8) -> i8 {
+        llr
+    }
+
+    fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
+    where
+        F: FnMut(SentMessage<i8>),
+    {
+        for exclude_msg in var_messages.iter() {
+            let mut sign: u32 = 0;
+            let mut minstar = None;
+            for msg in var_messages
+                .iter()
+                .filter(|msg| msg.source != exclude_msg.source)
+            {
+                let x = msg.value;
+                if x < 0 {
+                    sign ^= 1;
+                }
+                let x = x.abs();
+                minstar = Some(match minstar {
+                    None => x,
+                    // We clamp the output to 0 from below because we
+                    // are doing min* of positive numbers, but since
+                    // we've thrown away a positive term in the
+                    // approximation to min*, the approximation could
+                    // come out negative.
+                    Some(y) => (x.min(y) - self.lookup((x - y).abs())).max(0),
+                });
+            }
+            let minstar = minstar.expect("only one variable message connected to check node");
+            let minstar = if sign == 0 { minstar } else { -minstar };
+            send(SentMessage {
+                dest: exclude_msg.source,
+                value: minstar,
+            })
+        }
+    }
+
+    fn send_var_messages<F>(
+        &mut self,
+        input_llr: i8,
+        check_messages: &[Message<i8>],
+        mut send: F,
+    ) -> i8
+    where
+        F: FnMut(SentMessage<i8>),
+    {
+        // Compute new LLR. We use an i16 to avoid overflows.
+        let llr = i16::from(input_llr)
+            + check_messages
+                .iter()
+                .map(|m| i16::from(m.value))
+                .sum::<i16>();
+        // Exclude the contribution of each check node to generate message for
+        // that check node
+        for msg in check_messages.iter() {
+            send(SentMessage {
+                dest: msg.source,
+                value: Self::clip(llr - i16::from(msg.value)),
+            });
+        }
+        Self::clip(llr)
+    }
+}

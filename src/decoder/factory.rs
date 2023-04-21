@@ -5,7 +5,10 @@
 //! LdpcDecoder>`, using the trait [`LdpcDecoder`].
 
 use super::{
-    arithmetic::{DecoderArithmetic, Phif32, Phif64, Tanhf32, Tanhf64},
+    arithmetic::{
+        DecoderArithmetic, Minstarapproxf32, Minstarapproxf64, Minstarapproxi8, Phif32, Phif64,
+        Tanhf32, Tanhf64,
+    },
     Decoder, DecoderOutput,
 };
 use crate::sparse::SparseMatrix;
@@ -56,6 +59,16 @@ pub enum DecoderImplementation {
     Tanhf64,
     /// The [`Tanhf32`] implementation, using `f32` and the tanh rule.
     Tanhf32,
+    /// The [`Minstarapproxf64`] implementation, using `f64` and an
+    /// approximation to the min* function.
+    Minstarapproxf64,
+    /// The [`Minstarapproxf32`] implementation, using `f32` and an
+    /// approximation to the min* function.
+    Minstarapproxf32,
+    /// The [`Minstarapproxi8`] implementation, using 8-bit quantization and a
+    /// quantized approximation to the min* function (implemented using small
+    /// table lookup).
+    Minstarapproxi8,
 }
 
 macro_rules! impl_decoderimplementation {
@@ -108,4 +121,7 @@ impl_decoderimplementation!(
     DecoderImplementation::Phif32, Phif32, "Phif32";
     DecoderImplementation::Tanhf64, Tanhf64, "Tanhf64";
     DecoderImplementation::Tanhf32, Tanhf32, "Tanhf32";
+    DecoderImplementation::Minstarapproxf64, Minstarapproxf64, "Minstarapproxf64";
+    DecoderImplementation::Minstarapproxf32, Minstarapproxf32, "Minstarapproxf32";
+    DecoderImplementation::Minstarapproxi8, Minstarapproxi8, "Minstarapproxi8";
 );
