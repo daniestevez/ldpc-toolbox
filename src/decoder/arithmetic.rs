@@ -20,6 +20,7 @@
 //! 2012.
 
 use super::{Message, SentMessage};
+use std::convert::identity;
 
 /// LDPC decoder arithmetic.
 ///
@@ -404,143 +405,186 @@ macro_rules! impl_minstarapproxf {
 impl_minstarapproxf!(Minstarapproxf64, f64);
 impl_minstarapproxf!(Minstarapproxf32, f32);
 
-/// LDPC decoder arithmetic with 8-bit quantization and an approximation to the
-/// min* function.
-///
-/// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
-/// and messages and computes the check node messages using an approximation
-/// to the min* rule.
-///
-/// See (36) in [1].
-#[derive(Debug, Clone)]
-pub struct Minstarapproxi8 {
-    table: Box<[i8]>,
-}
-
-impl Minstarapproxi8 {
-    const QUANTIZER_C: f64 = 8.0;
-
-    /// Creates a new [`Minstarapproxi8`] decoder arithmetic object.
-    pub fn new() -> Minstarapproxi8 {
-        let table = (0..=127)
-            .map_while(|t| {
-                let x = (Self::QUANTIZER_C * (-(t as f64 / Self::QUANTIZER_C)).exp().ln_1p())
-                    .round() as i8;
-                if x > 0 {
-                    Some(x)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        Minstarapproxi8 { table }
-    }
-
-    fn lookup(&self, x: i8) -> i8 {
-        assert!(x >= 0);
-        self.table.get(x as usize).copied().unwrap_or(0)
-    }
-
-    fn clip(x: i16) -> i8 {
-        if x >= 127 {
-            127
-        } else if x <= -127 {
-            -127
-        } else {
-            x as i8
+macro_rules! impl_minstarapproxi8 {
+    ($ty:ident, $jones_clip:expr, $check_hardlimit:expr) => {
+        /// LDPC decoder arithmetic with 8-bit quantization and an approximation to the
+        /// min* function.
+        ///
+        /// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
+        /// and messages and computes the check node messages using an approximation
+        /// to the min* rule.
+        ///
+        /// See (36) in [1].
+        #[derive(Debug, Clone)]
+        pub struct $ty {
+            table: Box<[i8]>,
         }
-    }
-}
 
-impl Default for Minstarapproxi8 {
-    fn default() -> Minstarapproxi8 {
-        Minstarapproxi8::new()
-    }
-}
+        impl $ty {
+            const QUANTIZER_C: f64 = 8.0;
 
-impl DecoderArithmetic for Minstarapproxi8 {
-    type Llr = i8;
-    type CheckMessage = i8;
-    type VarMessage = i8;
-
-    fn input_llr_quantize(&self, llr: f64) -> i8 {
-        let x = Self::QUANTIZER_C * llr;
-        if x >= 127.0 {
-            127
-        } else if x <= -127.0 {
-            -127
-        } else {
-            x.round() as i8
-        }
-    }
-
-    fn llr_hard_decision(&self, llr: i8) -> bool {
-        llr <= 0
-    }
-
-    fn llr_to_var_message(&self, llr: i8) -> i8 {
-        llr
-    }
-
-    fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
-    where
-        F: FnMut(SentMessage<i8>),
-    {
-        for exclude_msg in var_messages.iter() {
-            let mut sign: u32 = 0;
-            let mut minstar = None;
-            for msg in var_messages
-                .iter()
-                .filter(|msg| msg.source != exclude_msg.source)
-            {
-                let x = msg.value;
-                if x < 0 {
-                    sign ^= 1;
-                }
-                let x = x.abs();
-                minstar = Some(match minstar {
-                    None => x,
-                    // We clamp the output to 0 from below because we
-                    // are doing min* of positive numbers, but since
-                    // we've thrown away a positive term in the
-                    // approximation to min*, the approximation could
-                    // come out negative.
-                    Some(y) => (x.min(y) - self.lookup((x - y).abs())).max(0),
-                });
+            /// Creates a new [`$ty`] decoder arithmetic object.
+            pub fn new() -> $ty {
+                let table = (0..=127)
+                    .map_while(|t| {
+                        let x = (Self::QUANTIZER_C
+                            * (-(t as f64 / Self::QUANTIZER_C)).exp().ln_1p())
+                        .round() as i8;
+                        if x > 0 {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice();
+                $ty { table }
             }
-            let minstar = minstar.expect("only one variable message connected to check node");
-            let minstar = if sign == 0 { minstar } else { -minstar };
-            send(SentMessage {
-                dest: exclude_msg.source,
-                value: minstar,
-            })
-        }
-    }
 
-    fn send_var_messages<F>(
-        &mut self,
-        input_llr: i8,
-        check_messages: &[Message<i8>],
-        mut send: F,
-    ) -> i8
-    where
-        F: FnMut(SentMessage<i8>),
-    {
-        // Compute new LLR. We use an i16 to avoid overflows.
-        let llr = i16::from(input_llr)
-            + check_messages
-                .iter()
-                .map(|m| i16::from(m.value))
-                .sum::<i16>();
-        // Exclude the contribution of each check node to generate message for
-        // that check node
-        for msg in check_messages.iter() {
-            send(SentMessage {
-                dest: msg.source,
-                value: Self::clip(llr - i16::from(msg.value)),
-            });
+            fn lookup(&self, x: i8) -> i8 {
+                assert!(x >= 0);
+                self.table.get(x as usize).copied().unwrap_or(0)
+            }
+
+            fn clip(x: i16) -> i8 {
+                if x >= 127 {
+                    127
+                } else if x <= -127 {
+                    -127
+                } else {
+                    x as i8
+                }
+            }
         }
-        Self::clip(llr)
-    }
+
+        impl Default for $ty {
+            fn default() -> $ty {
+                <$ty>::new()
+            }
+        }
+
+        impl DecoderArithmetic for $ty {
+            type Llr = i8;
+            type CheckMessage = i8;
+            type VarMessage = i8;
+
+            fn input_llr_quantize(&self, llr: f64) -> i8 {
+                let x = Self::QUANTIZER_C * llr;
+                if x >= 127.0 {
+                    127
+                } else if x <= -127.0 {
+                    -127
+                } else {
+                    x.round() as i8
+                }
+            }
+
+            fn llr_hard_decision(&self, llr: i8) -> bool {
+                llr <= 0
+            }
+
+            fn llr_to_var_message(&self, llr: i8) -> i8 {
+                llr
+            }
+
+            fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
+            where
+                F: FnMut(SentMessage<i8>),
+            {
+                for exclude_msg in var_messages.iter() {
+                    let mut sign: u32 = 0;
+                    let mut minstar = None;
+                    for msg in var_messages
+                        .iter()
+                        .filter(|msg| msg.source != exclude_msg.source)
+                    {
+                        let x = msg.value;
+                        if x < 0 {
+                            sign ^= 1;
+                        }
+                        let x = x.abs();
+                        minstar = Some(match minstar {
+                            None => x,
+                            // We clamp the output to 0 from below because we
+                            // are doing min* of positive numbers, but since
+                            // we've thrown away a positive term in the
+                            // approximation to min*, the approximation could
+                            // come out negative.
+                            Some(y) => (x.min(y) - self.lookup((x - y).abs())).max(0),
+                        });
+                    }
+                    let minstar =
+                        minstar.expect("only one variable message connected to check node");
+                    let minstar = if sign == 0 { minstar } else { -minstar };
+                    // Optional partial hard-limiting
+                    let minstar = $check_hardlimit(minstar);
+                    send(SentMessage {
+                        dest: exclude_msg.source,
+                        value: minstar,
+                    })
+                }
+            }
+
+            fn send_var_messages<F>(
+                &mut self,
+                input_llr: i8,
+                check_messages: &[Message<i8>],
+                mut send: F,
+            ) -> i8
+            where
+                F: FnMut(SentMessage<i8>),
+            {
+                // Compute new LLR. We use an i16 to avoid overflows.
+                let llr = i16::from(input_llr)
+                    + check_messages
+                        .iter()
+                        .map(|m| i16::from(m.value))
+                        .sum::<i16>();
+                // Optional Jones clipping
+                let llr = $jones_clip(llr);
+                // Exclude the contribution of each check node to generate message for
+                // that check node
+                for msg in check_messages.iter() {
+                    send(SentMessage {
+                        dest: msg.source,
+                        value: Self::clip(llr - i16::from(msg.value)),
+                    });
+                }
+                Self::clip(llr)
+            }
+        }
+    };
 }
+
+macro_rules! jones_clip {
+    () => {
+        |x| i16::from(Self::clip(x))
+    };
+}
+
+macro_rules! partial_hard_limit {
+    () => {
+        |x| {
+            if x <= -100 {
+                -127
+            } else if x >= 100 {
+                127
+            } else {
+                x
+            }
+        }
+    };
+}
+
+impl_minstarapproxi8!(Minstarapproxi8, identity, identity);
+impl_minstarapproxi8!(Minstarapproxi8Jones, jones_clip!(), identity);
+impl_minstarapproxi8!(
+    Minstarapproxi8PartialHardLimit,
+    identity,
+    partial_hard_limit!()
+);
+impl_minstarapproxi8!(
+    Minstarapproxi8JonesPartialHardLimit,
+    jones_clip!(),
+    partial_hard_limit!()
+);

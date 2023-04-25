@@ -6,8 +6,9 @@
 
 use super::{
     arithmetic::{
-        DecoderArithmetic, Minstarapproxf32, Minstarapproxf64, Minstarapproxi8, Phif32, Phif64,
-        Tanhf32, Tanhf64,
+        DecoderArithmetic, Minstarapproxf32, Minstarapproxf64, Minstarapproxi8,
+        Minstarapproxi8Jones, Minstarapproxi8JonesPartialHardLimit,
+        Minstarapproxi8PartialHardLimit, Phif32, Phif64, Tanhf32, Tanhf64,
     },
     Decoder, DecoderOutput,
 };
@@ -69,6 +70,20 @@ pub enum DecoderImplementation {
     /// quantized approximation to the min* function (implemented using small
     /// table lookup).
     Minstarapproxi8,
+    /// The [`Minstarapproxi8Jones`] implementation, using 8-bit quantization, a
+    /// quantized approximation to the min* function (implemented using small
+    /// table lookup), and Jones clipping for variable nodes.
+    Minstarapproxi8Jones,
+    /// The [`Minstarapproxi8PartialHardLimit`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), and partial hard-limiting for
+    /// check nodes.
+    Minstarapproxi8PartialHardLimit,
+    /// The [`Minstarapproxi8JonesPartialHardLimit`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), Jones clipping for variable
+    /// nodes, and partial hard-limiting for check nodes.
+    Minstarapproxi8JonesPartialHardLimit,
 }
 
 macro_rules! impl_decoderimplementation {
@@ -124,4 +139,7 @@ impl_decoderimplementation!(
     DecoderImplementation::Minstarapproxf64, Minstarapproxf64, "Minstarapproxf64";
     DecoderImplementation::Minstarapproxf32, Minstarapproxf32, "Minstarapproxf32";
     DecoderImplementation::Minstarapproxi8, Minstarapproxi8, "Minstarapproxi8";
+    DecoderImplementation::Minstarapproxi8Jones, Minstarapproxi8Jones, "Minstarapproxi8Jones";
+    DecoderImplementation::Minstarapproxi8PartialHardLimit, Minstarapproxi8PartialHardLimit, "Minstarapproxi8PartialHardLimit";
+    DecoderImplementation::Minstarapproxi8JonesPartialHardLimit, Minstarapproxi8JonesPartialHardLimit, "Minstarapproxi8JonesPartialHardLimit";
 );
