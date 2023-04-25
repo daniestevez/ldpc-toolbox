@@ -105,7 +105,7 @@ impl<A: DecoderArithmetic> Decoder<A> {
     /// `max_iterations`).
     pub fn decode(
         &mut self,
-        llrs: &[f32],
+        llrs: &[f64],
         max_iterations: usize,
     ) -> Result<DecoderOutput, DecoderOutput> {
         assert_eq!(llrs.len(), self.input_llrs.len());
@@ -140,7 +140,7 @@ impl<A: DecoderArithmetic> Decoder<A> {
         })
     }
 
-    fn initialize(&mut self, llrs: &[f32]) {
+    fn initialize(&mut self, llrs: &[f64]) {
         for (x, &y) in self.input_llrs.iter_mut().zip(llrs.iter()) {
             *x = self.arithmetic.input_llr_quantize(y)
         }
@@ -254,7 +254,7 @@ mod test {
 
     // These are based on example 2.23 in Sarah J. Johnson - Iterative Error Correction
 
-    fn to_llrs(bits: &[u8]) -> Vec<f32> {
+    fn to_llrs(bits: &[u8]) -> Vec<f64> {
         bits.iter()
             .map(|&b| if b == 0 { 1.3863 } else { -1.3863 })
             .collect()
@@ -265,7 +265,10 @@ mod test {
         let mut decoder = test_decoder();
         let codeword = [0, 0, 1, 0, 1, 1];
         let max_iter = 100;
-        let (decoded, iterations) = decoder.decode(&to_llrs(&codeword), max_iter).unwrap();
+        let DecoderOutput {
+            codeword: decoded,
+            iterations,
+        } = decoder.decode(&to_llrs(&codeword), max_iter).unwrap();
         assert_eq!(&decoded, &codeword);
         assert_eq!(iterations, 0);
     }
@@ -278,7 +281,10 @@ mod test {
             let mut codeword_bad = codeword_good.clone();
             codeword_bad[j] ^= 1;
             let max_iter = 100;
-            let (decoded, iterations) = decoder.decode(&to_llrs(&codeword_bad), max_iter).unwrap();
+            let DecoderOutput {
+                codeword: decoded,
+                iterations,
+            } = decoder.decode(&to_llrs(&codeword_bad), max_iter).unwrap();
             assert_eq!(&decoded, &codeword_good);
             assert_eq!(iterations, 1);
         }

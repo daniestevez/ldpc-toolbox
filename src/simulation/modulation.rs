@@ -20,14 +20,14 @@ impl BpskModulator {
     }
 
     /// Modulates a sequence of bits into symbols.
-    pub fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<f32>
+    pub fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<f64>
     where
         S: Data<Elem = GF2>,
     {
         codeword.iter().cloned().map(Self::modulate_bit).collect()
     }
 
-    fn modulate_bit(bit: GF2) -> f32 {
+    fn modulate_bit(bit: GF2) -> f64 {
         if bit.is_zero() {
             -1.0
         } else if bit.is_one() {
@@ -43,7 +43,7 @@ impl BpskModulator {
 /// Assumes the same mapping as the [BpskModulator].
 #[derive(Debug, Clone, Default)]
 pub struct BpskDemodulator {
-    scale: f32,
+    scale: f64,
 }
 
 impl BpskDemodulator {
@@ -52,7 +52,7 @@ impl BpskDemodulator {
     /// The `noise_sigma` indicates the channel noise standard deviation. The
     /// channel noise is assumed to be a real Gaussian with mean zero and
     /// standard deviation `noise_sigma`.
-    pub fn new(noise_sigma: f32) -> BpskDemodulator {
+    pub fn new(noise_sigma: f64) -> BpskDemodulator {
         BpskDemodulator {
             // Negative scale because we use the convention that +1 means a 1
             // bit.
@@ -61,7 +61,7 @@ impl BpskDemodulator {
     }
 
     /// Returns the LLRs corresponding to a sequence of symbols.
-    pub fn demodulate(&self, symbols: &[f32]) -> Vec<f32> {
+    pub fn demodulate(&self, symbols: &[f64]) -> Vec<f64> {
         symbols.iter().map(|&x| self.scale * x).collect()
     }
 }
@@ -79,7 +79,7 @@ mod test {
 
     #[test]
     fn demodulator() {
-        let demodulator = BpskDemodulator::new(2.0_f32.sqrt());
+        let demodulator = BpskDemodulator::new(2.0_f64.sqrt());
         let x = demodulator.demodulate(&[1.0, -1.0]);
         assert_eq!(x.len(), 2);
         let tol = 1e-4;

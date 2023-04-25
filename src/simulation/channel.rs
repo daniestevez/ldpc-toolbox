@@ -10,7 +10,7 @@ use rand_distr::{Distribution, Normal};
 /// This struct is used to add AWGN to symbols.
 #[derive(Debug, Clone)]
 pub struct AwgnChannel {
-    distr: Normal<f32>,
+    distr: Normal<f64>,
 }
 
 impl AwgnChannel {
@@ -22,7 +22,7 @@ impl AwgnChannel {
     /// # Panics
     ///
     /// This function panics if `noise_sigma` is not a positive finite number.
-    pub fn new(noise_sigma: f32) -> AwgnChannel {
+    pub fn new(noise_sigma: f64) -> AwgnChannel {
         assert!(noise_sigma >= 0.0);
         AwgnChannel {
             distr: Normal::new(0.0, noise_sigma).unwrap(),
@@ -33,7 +33,7 @@ impl AwgnChannel {
     ///
     /// The noise is added in-place to the slice `symbols`. An [Rng] is used as
     /// source of randomness.
-    pub fn add_noise<R: Rng>(&self, rng: &mut R, symbols: &mut [f32]) {
+    pub fn add_noise<R: Rng>(&self, rng: &mut R, symbols: &mut [f64]) {
         for x in symbols.iter_mut() {
             *x += self.distr.sample(rng);
         }

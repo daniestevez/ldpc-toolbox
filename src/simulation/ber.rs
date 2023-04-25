@@ -256,7 +256,7 @@ impl BerTest {
         for &ebn0_db in &self.ebn0s_db {
             let ebn0 = 10.0_f64.powf(0.1 * f64::from(ebn0_db));
             let esn0 = self.rate * ebn0;
-            let noise_sigma = (0.5 / esn0).sqrt() as f32;
+            let noise_sigma = (0.5 / esn0).sqrt();
             let (results_tx, results_rx) = mpsc::channel();
             let workers = std::iter::repeat_with(|| {
                 let (mut worker, terminate_tx) = self.make_worker(noise_sigma, results_tx.clone());
@@ -312,7 +312,7 @@ impl BerTest {
 
     fn make_worker(
         &self,
-        noise_sigma: f32,
+        noise_sigma: f64,
         results_tx: Sender<WorkerResult>,
     ) -> (Worker, SyncSender<()>) {
         let (terminate_tx, terminate_rx) = mpsc::sync_channel(1);

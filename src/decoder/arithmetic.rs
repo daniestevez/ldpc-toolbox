@@ -51,7 +51,7 @@ pub trait DecoderArithmetic: std::fmt::Debug + Send {
     ///
     /// Defines how the channel LLRs (the input to the decoder) are quantized
     /// and represented internally as a [`Self::Llr`].
-    fn input_llr_quantize(&self, llr: f32) -> Self::Llr;
+    fn input_llr_quantize(&self, llr: f64) -> Self::Llr;
 
     /// Hard decision on LLRs.
     ///
@@ -154,8 +154,8 @@ macro_rules! impl_phif {
             type CheckMessage = $f;
             type VarMessage = $f;
 
-            fn input_llr_quantize(&self, llr: f32) -> $f {
-                <$f>::from(llr)
+            fn input_llr_quantize(&self, llr: f64) -> $f {
+                llr as $f
             }
 
             fn llr_hard_decision(&self, llr: $f) -> bool {
@@ -244,8 +244,8 @@ macro_rules! impl_tanhf {
             type CheckMessage = $f;
             type VarMessage = $f;
 
-            fn input_llr_quantize(&self, llr: f32) -> $f {
-                <$f>::from(llr)
+            fn input_llr_quantize(&self, llr: f64) -> $f {
+                llr as $f
             }
 
             fn llr_hard_decision(&self, llr: $f) -> bool {
@@ -338,8 +338,8 @@ macro_rules! impl_minstarapproxf {
             type CheckMessage = $f;
             type VarMessage = $f;
 
-            fn input_llr_quantize(&self, llr: f32) -> $f {
-                <$f>::from(llr)
+            fn input_llr_quantize(&self, llr: f64) -> $f {
+                llr as $f
             }
 
             fn llr_hard_decision(&self, llr: $f) -> bool {
@@ -464,8 +464,8 @@ impl DecoderArithmetic for Minstarapproxi8 {
     type CheckMessage = i8;
     type VarMessage = i8;
 
-    fn input_llr_quantize(&self, llr: f32) -> i8 {
-        let x = Self::QUANTIZER_C as f32 * llr;
+    fn input_llr_quantize(&self, llr: f64) -> i8 {
+        let x = Self::QUANTIZER_C * llr;
         if x >= 127.0 {
             127
         } else if x <= -127.0 {

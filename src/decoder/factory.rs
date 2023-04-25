@@ -30,7 +30,7 @@ pub trait LdpcDecoder: std::fmt::Debug + Send {
     /// `max_iterations`).
     fn decode(
         &mut self,
-        llrs: &[f32],
+        llrs: &[f64],
         max_iterations: usize,
     ) -> Result<DecoderOutput, DecoderOutput>;
 }
@@ -38,7 +38,7 @@ pub trait LdpcDecoder: std::fmt::Debug + Send {
 impl<A: DecoderArithmetic> LdpcDecoder for Decoder<A> {
     fn decode(
         &mut self,
-        llrs: &[f32],
+        llrs: &[f64],
         max_iterations: usize,
     ) -> Result<DecoderOutput, DecoderOutput> {
         Decoder::decode(self, llrs, max_iterations)

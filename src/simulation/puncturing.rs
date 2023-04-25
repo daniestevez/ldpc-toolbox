@@ -80,13 +80,13 @@ impl Puncturer {
     /// while the output length is equal to the codeword length. An error is
     /// returned if the length of input is not divisible by the number of `true`
     /// elements in the pattern.
-    pub fn depuncture(&self, llrs: &[f32]) -> Result<Vec<f32>, Error> {
+    pub fn depuncture<T: Copy + Default>(&self, llrs: &[T]) -> Result<Vec<T>, Error> {
         if llrs.len() % self.num_trues != 0 {
             return Err(Error::CodewordSizeNotDivisible);
         }
         let block_size = llrs.len() / self.num_trues;
         let output_size = self.pattern.len() * block_size;
-        let mut output = vec![0.0; output_size];
+        let mut output = vec![T::default(); output_size];
         for (j, k) in self
             .pattern
             .iter()
