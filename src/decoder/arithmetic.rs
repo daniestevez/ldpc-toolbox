@@ -406,7 +406,7 @@ impl_minstarapproxf!(Minstarapproxf64, f64);
 impl_minstarapproxf!(Minstarapproxf32, f32);
 
 macro_rules! impl_minstarapproxi8 {
-    ($ty:ident, $jones_clip:expr, $check_hardlimit:expr) => {
+    ($ty:ident, $jones_clip:expr, $check_hardlimit:expr, $degree_one_clip:expr) => {
         /// LDPC decoder arithmetic with 8-bit quantization and an approximation to the
         /// min* function.
         ///
@@ -534,8 +534,9 @@ macro_rules! impl_minstarapproxi8 {
             where
                 F: FnMut(SentMessage<i8>),
             {
+                let degree_one = check_messages.len() == 1;
                 // Compute new LLR. We use an i16 to avoid overflows.
-                let llr = i16::from(input_llr)
+                let llr = i16::from($degree_one_clip(input_llr, degree_one))
                     + check_messages
                         .iter()
                         .map(|m| i16::from(m.value))
@@ -576,15 +577,75 @@ macro_rules! partial_hard_limit {
     };
 }
 
-impl_minstarapproxi8!(Minstarapproxi8, identity, identity);
-impl_minstarapproxi8!(Minstarapproxi8Jones, jones_clip!(), identity);
+macro_rules! degree_one_clipping {
+    () => {
+        |x, degree_one| {
+            if degree_one {
+                if x <= -116 {
+                    -116
+                } else if x >= 116 {
+                    116
+                } else {
+                    x
+                }
+            } else {
+                x
+            }
+        }
+    };
+}
+
+macro_rules! degree_one_no_clipping {
+    () => {
+        |x, _| x
+    };
+}
+
+impl_minstarapproxi8!(
+    Minstarapproxi8,
+    identity,
+    identity,
+    degree_one_no_clipping!()
+);
+impl_minstarapproxi8!(
+    Minstarapproxi8Jones,
+    jones_clip!(),
+    identity,
+    degree_one_no_clipping!()
+);
 impl_minstarapproxi8!(
     Minstarapproxi8PartialHardLimit,
     identity,
-    partial_hard_limit!()
+    partial_hard_limit!(),
+    degree_one_no_clipping!()
 );
 impl_minstarapproxi8!(
     Minstarapproxi8JonesPartialHardLimit,
     jones_clip!(),
-    partial_hard_limit!()
+    partial_hard_limit!(),
+    degree_one_no_clipping!()
+);
+impl_minstarapproxi8!(
+    Minstarapproxi8Deg1Clip,
+    identity,
+    identity,
+    degree_one_clipping!()
+);
+impl_minstarapproxi8!(
+    Minstarapproxi8JonesDeg1Clip,
+    jones_clip!(),
+    identity,
+    degree_one_clipping!()
+);
+impl_minstarapproxi8!(
+    Minstarapproxi8PartialHardLimitDeg1Clip,
+    identity,
+    partial_hard_limit!(),
+    degree_one_clipping!()
+);
+impl_minstarapproxi8!(
+    Minstarapproxi8JonesPartialHardLimitDeg1Clip,
+    jones_clip!(),
+    partial_hard_limit!(),
+    degree_one_clipping!()
 );

@@ -7,8 +7,10 @@
 use super::{
     arithmetic::{
         DecoderArithmetic, Minstarapproxf32, Minstarapproxf64, Minstarapproxi8,
-        Minstarapproxi8Jones, Minstarapproxi8JonesPartialHardLimit,
-        Minstarapproxi8PartialHardLimit, Phif32, Phif64, Tanhf32, Tanhf64,
+        Minstarapproxi8Deg1Clip, Minstarapproxi8Jones, Minstarapproxi8JonesDeg1Clip,
+        Minstarapproxi8JonesPartialHardLimit, Minstarapproxi8JonesPartialHardLimitDeg1Clip,
+        Minstarapproxi8PartialHardLimit, Minstarapproxi8PartialHardLimitDeg1Clip, Phif32, Phif64,
+        Tanhf32, Tanhf64,
     },
     Decoder, DecoderOutput,
 };
@@ -84,6 +86,27 @@ pub enum DecoderImplementation {
     /// (implemented using small table lookup), Jones clipping for variable
     /// nodes, and partial hard-limiting for check nodes.
     Minstarapproxi8JonesPartialHardLimit,
+    /// The [`Minstarapproxi8Deg1Clip`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), and degree-1 variable node
+    /// clipping.
+    Minstarapproxi8Deg1Clip,
+    /// The [`Minstarapproxi8JonesDeg1Clip`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), Jones clipping for variable
+    /// nodes, and degree-1 variable node clipping.
+    Minstarapproxi8JonesDeg1Clip,
+    /// The [`Minstarapproxi8PartialHardLimitDeg1Clip`] implementation, using
+    /// 8-bit quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), partial hard-limiting for check
+    /// nodes, and degree-1 variable node clipping.
+    Minstarapproxi8PartialHardLimitDeg1Clip,
+    /// The [`Minstarapproxi8JonesPartialHardLimitDeg1Clip`] implementation,
+    /// using 8-bit quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), Jones clipping for variable
+    /// nodes, partial hard-limiting for check nodes, and degree-1 variable node
+    /// clipping.
+    Minstarapproxi8JonesPartialHardLimitDeg1Clip,
 }
 
 macro_rules! impl_decoderimplementation {
@@ -142,4 +165,8 @@ impl_decoderimplementation!(
     DecoderImplementation::Minstarapproxi8Jones, Minstarapproxi8Jones, "Minstarapproxi8Jones";
     DecoderImplementation::Minstarapproxi8PartialHardLimit, Minstarapproxi8PartialHardLimit, "Minstarapproxi8PartialHardLimit";
     DecoderImplementation::Minstarapproxi8JonesPartialHardLimit, Minstarapproxi8JonesPartialHardLimit, "Minstarapproxi8JonesPartialHardLimit";
+    DecoderImplementation::Minstarapproxi8Deg1Clip, Minstarapproxi8Deg1Clip, "Minstarapproxi8Deg1Clip";
+    DecoderImplementation::Minstarapproxi8JonesDeg1Clip, Minstarapproxi8JonesDeg1Clip, "Minstarapproxi8JonesDeg1Clip";
+    DecoderImplementation::Minstarapproxi8PartialHardLimitDeg1Clip, Minstarapproxi8PartialHardLimitDeg1Clip, "Minstarapproxi8PartialHardLimitDeg1Clip";
+    DecoderImplementation::Minstarapproxi8JonesPartialHardLimitDeg1Clip, Minstarapproxi8JonesPartialHardLimitDeg1Clip, "Minstarapproxi8JonesPartialHardLimitDeg1Clip";
 );
