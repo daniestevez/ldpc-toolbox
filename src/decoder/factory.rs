@@ -4,16 +4,7 @@
 //! arithmetic implementation. Such decoders are represented by `Box<dyn
 //! LdpcDecoder>`, using the trait [`LdpcDecoder`].
 
-use super::{
-    arithmetic::{
-        DecoderArithmetic, Minstarapproxf32, Minstarapproxf64, Minstarapproxi8,
-        Minstarapproxi8Deg1Clip, Minstarapproxi8Jones, Minstarapproxi8JonesDeg1Clip,
-        Minstarapproxi8JonesPartialHardLimit, Minstarapproxi8JonesPartialHardLimitDeg1Clip,
-        Minstarapproxi8PartialHardLimit, Minstarapproxi8PartialHardLimitDeg1Clip, Phif32, Phif64,
-        Tanhf32, Tanhf64,
-    },
-    Decoder, DecoderOutput,
-};
+use super::{arithmetic::*, Decoder, DecoderOutput};
 use crate::sparse::SparseMatrix;
 
 /// Generic LDPC decoder.
@@ -107,6 +98,51 @@ pub enum DecoderImplementation {
     /// nodes, partial hard-limiting for check nodes, and degree-1 variable node
     /// clipping.
     Minstarapproxi8JonesPartialHardLimitDeg1Clip,
+    /// The [`Aminstarf64`] implementation, using `f64` and an approximation to
+    /// the min* function.
+    Aminstarf64,
+    /// The [`Aminstarf32`] implementation, using `f32` and an approximation to
+    /// the min* function.
+    Aminstarf32,
+    /// The [`Aminstari8`] implementation, using 8-bit quantization and a
+    /// quantized approximation to the min* function (implemented using small
+    /// table lookup).
+    Aminstari8,
+    /// The [`Aminstari8Jones`] implementation, using 8-bit quantization, a
+    /// quantized approximation to the min* function (implemented using small
+    /// table lookup), and Jones clipping for variable nodes.
+    Aminstari8Jones,
+    /// The [`Aminstari8PartialHardLimit`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), and partial hard-limiting for
+    /// check nodes.
+    Aminstari8PartialHardLimit,
+    /// The [`Aminstari8JonesPartialHardLimit`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), Jones clipping for variable
+    /// nodes, and partial hard-limiting for check nodes.
+    Aminstari8JonesPartialHardLimit,
+    /// The [`Aminstari8Deg1Clip`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), and degree-1 variable node
+    /// clipping.
+    Aminstari8Deg1Clip,
+    /// The [`Aminstari8JonesDeg1Clip`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), Jones clipping for variable
+    /// nodes, and degree-1 variable node clipping.
+    Aminstari8JonesDeg1Clip,
+    /// The [`Aminstari8PartialHardLimitDeg1Clip`] implementation, using
+    /// 8-bit quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), partial hard-limiting for check
+    /// nodes, and degree-1 variable node clipping.
+    Aminstari8PartialHardLimitDeg1Clip,
+    /// The [`Aminstari8JonesPartialHardLimitDeg1Clip`] implementation,
+    /// using 8-bit quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), Jones clipping for variable
+    /// nodes, partial hard-limiting for check nodes, and degree-1 variable node
+    /// clipping.
+    Aminstari8JonesPartialHardLimitDeg1Clip,
 }
 
 macro_rules! impl_decoderimplementation {
@@ -169,4 +205,14 @@ impl_decoderimplementation!(
     DecoderImplementation::Minstarapproxi8JonesDeg1Clip, Minstarapproxi8JonesDeg1Clip, "Minstarapproxi8JonesDeg1Clip";
     DecoderImplementation::Minstarapproxi8PartialHardLimitDeg1Clip, Minstarapproxi8PartialHardLimitDeg1Clip, "Minstarapproxi8PartialHardLimitDeg1Clip";
     DecoderImplementation::Minstarapproxi8JonesPartialHardLimitDeg1Clip, Minstarapproxi8JonesPartialHardLimitDeg1Clip, "Minstarapproxi8JonesPartialHardLimitDeg1Clip";
+    DecoderImplementation::Aminstarf64, Aminstarf64, "Aminstarf64";
+    DecoderImplementation::Aminstarf32, Aminstarf32, "Aminstarf32";
+    DecoderImplementation::Aminstari8, Aminstari8, "Aminstari8";
+    DecoderImplementation::Aminstari8Jones, Aminstari8Jones, "Aminstari8Jones";
+    DecoderImplementation::Aminstari8PartialHardLimit, Aminstari8PartialHardLimit, "Aminstari8PartialHardLimit";
+    DecoderImplementation::Aminstari8JonesPartialHardLimit, Aminstari8JonesPartialHardLimit, "Aminstari8JonesPartialHardLimit";
+    DecoderImplementation::Aminstari8Deg1Clip, Aminstari8Deg1Clip, "Aminstari8Deg1Clip";
+    DecoderImplementation::Aminstari8JonesDeg1Clip, Aminstari8JonesDeg1Clip, "Aminstari8JonesDeg1Clip";
+    DecoderImplementation::Aminstari8PartialHardLimitDeg1Clip, Aminstari8PartialHardLimitDeg1Clip, "Aminstari8PartialHardLimitDeg1Clip";
+    DecoderImplementation::Aminstari8JonesPartialHardLimitDeg1Clip, Aminstari8JonesPartialHardLimitDeg1Clip, "Aminstari8JonesPartialHardLimitDeg1Clip";
 );

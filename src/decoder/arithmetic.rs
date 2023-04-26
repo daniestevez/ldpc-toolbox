@@ -18,6 +18,13 @@
 //! [2] Sarah J. Johnson, Iterative Error Correction: Turbo, Low-Density
 //! Parity-Check and Repeat-Accumulate Codes. Cambridge University Press. June
 //! 2012.
+//!
+//! Other references:
+//!
+//! [3] C. Jones, et al. “Approximate-MIN* Constraint Node Updating for LDPC
+//! Code Decoding.” In Proceedings of MILCOM 2003 (Boston, Massachusetts),
+//! 1-157-1-162. Piscataway, NJ: IEEE, October 2003.
+//!
 
 use super::{Message, SentMessage};
 use std::convert::identity;
@@ -405,21 +412,8 @@ macro_rules! impl_minstarapproxf {
 impl_minstarapproxf!(Minstarapproxf64, f64);
 impl_minstarapproxf!(Minstarapproxf32, f32);
 
-macro_rules! impl_minstarapproxi8 {
-    ($ty:ident, $jones_clip:expr, $check_hardlimit:expr, $degree_one_clip:expr) => {
-        /// LDPC decoder arithmetic with 8-bit quantization and an approximation to the
-        /// min* function.
-        ///
-        /// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
-        /// and messages and computes the check node messages using an approximation
-        /// to the min* rule.
-        ///
-        /// See (36) in [1].
-        #[derive(Debug, Clone)]
-        pub struct $ty {
-            table: Box<[i8]>,
-        }
-
+macro_rules! impl_8bitquant {
+    ($ty:ident) => {
         impl $ty {
             const QUANTIZER_C: f64 = 8.0;
 
@@ -456,6 +450,58 @@ macro_rules! impl_minstarapproxi8 {
                 }
             }
         }
+    };
+}
+
+macro_rules! impl_send_var_messages_i8 {
+    ($degree_one_clip:expr, $jones_clip:expr) => {
+        fn send_var_messages<F>(
+            &mut self,
+            input_llr: i8,
+            check_messages: &[Message<i8>],
+            mut send: F,
+        ) -> i8
+        where
+            F: FnMut(SentMessage<i8>),
+        {
+            let degree_one = check_messages.len() == 1;
+            // Compute new LLR. We use an i16 to avoid overflows.
+            let llr = i16::from($degree_one_clip(input_llr, degree_one))
+                + check_messages
+                    .iter()
+                    .map(|m| i16::from(m.value))
+                    .sum::<i16>();
+            // Optional Jones clipping
+            let llr = $jones_clip(llr);
+            // Exclude the contribution of each check node to generate message for
+            // that check node
+            for msg in check_messages.iter() {
+                send(SentMessage {
+                    dest: msg.source,
+                    value: Self::clip(llr - i16::from(msg.value)),
+                });
+            }
+            Self::clip(llr)
+        }
+    };
+}
+
+macro_rules! impl_minstarapproxi8 {
+    ($ty:ident, $jones_clip:expr, $check_hardlimit:expr, $degree_one_clip:expr) => {
+        /// LDPC decoder arithmetic with 8-bit quantization and an approximation to the
+        /// min* function.
+        ///
+        /// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
+        /// and messages and computes the check node messages using an approximation
+        /// to the min* rule.
+        ///
+        /// See (36) in [1].
+        #[derive(Debug, Clone)]
+        pub struct $ty {
+            table: Box<[i8]>,
+        }
+
+        impl_8bitquant!($ty);
 
         impl Default for $ty {
             fn default() -> $ty {
@@ -525,34 +571,7 @@ macro_rules! impl_minstarapproxi8 {
                 }
             }
 
-            fn send_var_messages<F>(
-                &mut self,
-                input_llr: i8,
-                check_messages: &[Message<i8>],
-                mut send: F,
-            ) -> i8
-            where
-                F: FnMut(SentMessage<i8>),
-            {
-                let degree_one = check_messages.len() == 1;
-                // Compute new LLR. We use an i16 to avoid overflows.
-                let llr = i16::from($degree_one_clip(input_llr, degree_one))
-                    + check_messages
-                        .iter()
-                        .map(|m| i16::from(m.value))
-                        .sum::<i16>();
-                // Optional Jones clipping
-                let llr = $jones_clip(llr);
-                // Exclude the contribution of each check node to generate message for
-                // that check node
-                for msg in check_messages.iter() {
-                    send(SentMessage {
-                        dest: msg.source,
-                        value: Self::clip(llr - i16::from(msg.value)),
-                    });
-                }
-                Self::clip(llr)
-            }
+            impl_send_var_messages_i8!($degree_one_clip, $jones_clip);
         }
     };
 }
@@ -645,6 +664,273 @@ impl_minstarapproxi8!(
 );
 impl_minstarapproxi8!(
     Minstarapproxi8JonesPartialHardLimitDeg1Clip,
+    jones_clip!(),
+    partial_hard_limit!(),
+    degree_one_clipping!()
+);
+
+macro_rules! impl_aminstarf {
+    ($ty:ident, $f:ty) => {
+        /// LDPC decoder arithmetic with `$f` and the A-Min*-BP described in [3].
+        ///
+        /// This is a [`DecoderArithmetic`] that uses `$f` to represent the LLRs
+        /// and messages and computes the check node messages using an approximation
+        /// to the min* rule.
+        #[derive(Debug, Clone, Default)]
+        pub struct $ty {}
+
+        impl $ty {
+            /// Creates a new [`$ty`] decoder arithmetic object.
+            pub fn new() -> $ty {
+                <$ty>::default()
+            }
+        }
+
+        impl DecoderArithmetic for $ty {
+            type Llr = $f;
+            type CheckMessage = $f;
+            type VarMessage = $f;
+
+            fn input_llr_quantize(&self, llr: f64) -> $f {
+                llr as $f
+            }
+
+            fn llr_hard_decision(&self, llr: $f) -> bool {
+                llr <= 0.0
+            }
+
+            fn llr_to_var_message(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                let (argmin, msgmin) = var_messages
+                    .iter()
+                    .enumerate()
+                    .min_by(|(_, msg1), (_, msg2)| {
+                        msg1.value.abs().partial_cmp(&msg2.value.abs()).unwrap()
+                    })
+                    .expect("var_messages is empty");
+                let mut sign: u32 = 0;
+                let mut delta = None;
+                for (j, msg) in var_messages.iter().enumerate() {
+                    let x = msg.value;
+                    if x < 0.0 {
+                        sign ^= 1;
+                    }
+                    if j != argmin {
+                        let x = x.abs();
+                        delta = Some(match delta {
+                            None => x,
+                            Some(y) => {
+                                (x.min(y) - (-(x - y).abs()).exp().ln_1p()
+                                    + (-(x + y)).exp().ln_1p())
+                            }
+                        });
+                    }
+                }
+                let delta = delta.expect("var_messages_empty");
+
+                send(SentMessage {
+                    dest: msgmin.source,
+                    value: if (sign != 0) ^ (msgmin.value < 0.0) {
+                        -delta
+                    } else {
+                        delta
+                    },
+                });
+
+                let vmin = msgmin.value.abs();
+                let delta = delta.min(vmin) - (-(delta - vmin).abs()).exp().ln_1p()
+                    + (-(delta + vmin)).exp().ln_1p();
+                for msg in var_messages.iter().enumerate().filter_map(|(j, msg)| {
+                    if j != argmin {
+                        Some(msg)
+                    } else {
+                        None
+                    }
+                }) {
+                    send(SentMessage {
+                        dest: msg.source,
+                        value: if (sign != 0) ^ (msg.value < 0.0) {
+                            -delta
+                        } else {
+                            delta
+                        },
+                    });
+                }
+            }
+
+            fn send_var_messages<F>(
+                &mut self,
+                input_llr: $f,
+                check_messages: &[Message<$f>],
+                send: F,
+            ) -> $f
+            where
+                F: FnMut(SentMessage<$f>),
+            {
+                send_var_messages_no_clip(input_llr, check_messages, send)
+            }
+        }
+    };
+}
+
+impl_aminstarf!(Aminstarf64, f64);
+impl_aminstarf!(Aminstarf32, f32);
+
+macro_rules! impl_aminstari8 {
+    ($ty:ident, $jones_clip:expr, $check_hardlimit:expr, $degree_one_clip:expr) => {
+        /// LDPC decoder arithmetic with 8-bit quantization and the A-Min*-BP
+        /// described in [3].
+        ///
+        /// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
+        /// and messages and computes the check node messages using an approximation
+        /// to the min* rule.
+        #[derive(Debug, Clone, Default)]
+        pub struct $ty {
+            table: Box<[i8]>,
+        }
+
+        impl_8bitquant!($ty);
+
+        impl DecoderArithmetic for $ty {
+            type Llr = i8;
+            type CheckMessage = i8;
+            type VarMessage = i8;
+
+            fn input_llr_quantize(&self, llr: f64) -> i8 {
+                let x = Self::QUANTIZER_C * llr;
+                if x >= 127.0 {
+                    127
+                } else if x <= -127.0 {
+                    -127
+                } else {
+                    x.round() as i8
+                }
+            }
+
+            fn llr_hard_decision(&self, llr: i8) -> bool {
+                llr <= 0
+            }
+
+            fn llr_to_var_message(&self, llr: i8) -> i8 {
+                llr
+            }
+
+            fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
+            where
+                F: FnMut(SentMessage<i8>),
+            {
+                let (argmin, msgmin) = var_messages
+                    .iter()
+                    .enumerate()
+                    .min_by_key(|(_, msg)| msg.value.abs())
+                    .expect("var_messages is empty");
+                let mut sign: u32 = 0;
+                let mut delta = None;
+                for (j, msg) in var_messages.iter().enumerate() {
+                    let x = msg.value;
+                    if x < 0 {
+                        sign ^= 1;
+                    }
+                    if j != argmin {
+                        let x = x.abs();
+                        delta = Some(match delta {
+                            None => x,
+                            // We clamp the output to 0 from below because we
+                            // are doing min* of positive numbers, but since
+                            // we've thrown away a positive term in the
+                            // approximation to min*, the approximation could
+                            // come out negative.
+                            Some(y) => (x.min(y) - self.lookup((x - y).abs())
+                                + self.lookup(x.saturating_add(y)))
+                            .max(0),
+                        });
+                    }
+                }
+                let delta = delta.expect("var_messages_empty");
+                let delta_hl = $check_hardlimit(delta);
+
+                send(SentMessage {
+                    dest: msgmin.source,
+                    value: if (sign != 0) ^ (msgmin.value < 0) {
+                        -delta_hl
+                    } else {
+                        delta_hl
+                    },
+                });
+
+                let vmin = msgmin.value.abs();
+                let delta = (delta.min(vmin) - self.lookup((delta - vmin).abs())
+                    + self.lookup(delta.saturating_add(vmin)))
+                .max(0);
+                let delta_hl = $check_hardlimit(delta);
+                for msg in var_messages.iter().enumerate().filter_map(|(j, msg)| {
+                    if j != argmin {
+                        Some(msg)
+                    } else {
+                        None
+                    }
+                }) {
+                    send(SentMessage {
+                        dest: msg.source,
+                        value: if (sign != 0) ^ (msg.value < 0) {
+                            -delta_hl
+                        } else {
+                            delta_hl
+                        },
+                    });
+                }
+            }
+
+            impl_send_var_messages_i8!($degree_one_clip, $jones_clip);
+        }
+    };
+}
+
+impl_aminstari8!(Aminstari8, identity, identity, degree_one_no_clipping!());
+impl_aminstari8!(
+    Aminstari8Jones,
+    jones_clip!(),
+    identity,
+    degree_one_no_clipping!()
+);
+impl_aminstari8!(
+    Aminstari8PartialHardLimit,
+    identity,
+    partial_hard_limit!(),
+    degree_one_no_clipping!()
+);
+impl_aminstari8!(
+    Aminstari8JonesPartialHardLimit,
+    jones_clip!(),
+    partial_hard_limit!(),
+    degree_one_no_clipping!()
+);
+impl_aminstari8!(
+    Aminstari8Deg1Clip,
+    identity,
+    identity,
+    degree_one_clipping!()
+);
+impl_aminstari8!(
+    Aminstari8JonesDeg1Clip,
+    jones_clip!(),
+    identity,
+    degree_one_clipping!()
+);
+impl_aminstari8!(
+    Aminstari8PartialHardLimitDeg1Clip,
+    identity,
+    partial_hard_limit!(),
+    degree_one_clipping!()
+);
+impl_aminstari8!(
+    Aminstari8JonesPartialHardLimitDeg1Clip,
     jones_clip!(),
     partial_hard_limit!(),
     degree_one_clipping!()
