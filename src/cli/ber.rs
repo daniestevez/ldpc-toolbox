@@ -10,8 +10,10 @@ use crate::{
 };
 use clap::Parser;
 use console::Term;
-use std::error::Error;
 use std::{
+    error::Error,
+    fs::File,
+    io::Write,
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
@@ -22,6 +24,9 @@ use std::{
 pub struct Args {
     /// alist file for the code
     alist: String,
+    /// Output file for simulation results
+    #[structopt(long)]
+    output_file: Option<String>,
     /// Decoder implementation
     #[structopt(long, default_value = "Phif64")]
     decoder: DecoderImplementation,
@@ -53,6 +58,11 @@ impl Run for Args {
             None
         };
         let h = SparseMatrix::from_alist(&std::fs::read_to_string(&self.alist)?)?;
+        let output_file = if let Some(f) = &self.output_file {
+            Some(File::create(f)?)
+        } else {
+            None
+        };
         let num_ebn0s = ((self.max_ebn0 - self.min_ebn0) / self.step_ebn0).floor() as usize + 1;
         let ebn0s = (0..num_ebn0s)
             .map(|k| (self.min_ebn0 + k as f64 * self.step_ebn0) as f32)
@@ -71,8 +81,11 @@ impl Run for Args {
             &ebn0s,
             Some(reporter),
         )?;
-        self.print_details(&test);
-        let progress = Progress::new(report_rx);
+        self.write_details(std::io::stdout(), &test)?;
+        if let Some(f) = &output_file {
+            self.write_details(f, &test)?;
+        }
+        let mut progress = Progress::new(report_rx, output_file);
         let progress = std::thread::spawn(move || progress.run());
         test.run()?;
         // This block cannot actually be written with the ? operator
@@ -85,27 +98,28 @@ impl Run for Args {
 }
 
 impl Args {
-    fn print_details(&self, test: &BerTest) {
-        println!("BER TEST PARAMETERS");
-        println!("-------------------");
-        println!("Simulation:");
-        println!(" - Minimum Eb/N0: {:.2} dB", self.min_ebn0);
-        println!(" - Maximum Eb/N0: {:.2} dB", self.max_ebn0);
-        println!(" - Eb/N0 step: {:.2} dB", self.step_ebn0);
-        println!(" - Number of frame errors: {}", self.frame_errors);
-        println!("LDPC code:");
-        println!(" - alist: {}", self.alist);
+    fn write_details<W: Write>(&self, mut f: W, test: &BerTest) -> std::io::Result<()> {
+        writeln!(f, "BER TEST PARAMETERS")?;
+        writeln!(f, "-------------------")?;
+        writeln!(f, "Simulation:")?;
+        writeln!(f, " - Minimum Eb/N0: {:.2} dB", self.min_ebn0)?;
+        writeln!(f, " - Maximum Eb/N0: {:.2} dB", self.max_ebn0)?;
+        writeln!(f, " - Eb/N0 step: {:.2} dB", self.step_ebn0)?;
+        writeln!(f, " - Number of frame errors: {}", self.frame_errors)?;
+        writeln!(f, "LDPC code:")?;
+        writeln!(f, " - alist: {}", self.alist)?;
         if let Some(puncturing) = self.puncturing.as_ref() {
-            println!(" - Puncturing pattern: {puncturing}");
+            writeln!(f, " - Puncturing pattern: {puncturing}")?;
         }
-        println!(" - Information bits (k): {}", test.k());
-        println!(" - Codeword size (N_cw): {}", test.n_cw());
-        println!(" - Frame size (N): {}", test.n());
-        println!(" - Code rate: {:.3}", test.rate());
-        println!("LDPC decoder:");
-        println!(" - Implementation: {}", self.decoder);
-        println!(" - Maximum iterations: {}", self.max_iter);
-        println!();
+        writeln!(f, " - Information bits (k): {}", test.k())?;
+        writeln!(f, " - Codeword size (N_cw): {}", test.n_cw())?;
+        writeln!(f, " - Frame size (N): {}", test.n())?;
+        writeln!(f, " - Code rate: {:.3}", test.rate())?;
+        writeln!(f, "LDPC decoder:")?;
+        writeln!(f, " - Implementation: {}", self.decoder)?;
+        writeln!(f, " - Maximum iterations: {}", self.max_iter)?;
+        writeln!(f)?;
+        Ok(())
     }
 }
 
@@ -125,17 +139,19 @@ fn parse_puncturing_pattern(s: &str) -> Result<Vec<bool>, &'static str> {
 struct Progress {
     rx: Receiver<Report>,
     term: Term,
+    output_file: Option<File>,
 }
 
 impl Progress {
-    fn new(rx: Receiver<Report>) -> Progress {
+    fn new(rx: Receiver<Report>, output_file: Option<File>) -> Progress {
         Progress {
             rx,
             term: Term::stdout(),
+            output_file,
         }
     }
 
-    fn run(&self) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    fn run(&mut self) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         ctrlc::set_handler({
             let term = self.term.clone();
             move || {
@@ -151,25 +167,38 @@ impl Progress {
         ret
     }
 
-    fn work(&self) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    fn work(&mut self) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         self.term.set_title("ldpc-toolbox ber");
         self.term.hide_cursor()?;
         self.term.write_line(Self::format_header())?;
-        let mut current_ebn0 = None;
+        if let Some(f) = &mut self.output_file {
+            writeln!(f, "{}", Self::format_header())?;
+        }
+        let mut last_stats = None;
         loop {
             let Report::Statistics(stats) = self.rx.recv().unwrap() else {
                 // BER test has finished
+                if let Some(f) = &mut self.output_file {
+                    writeln!(f, "{}", &Self::format_progress(&last_stats.unwrap()))?;
+                }
                 return Ok(())
             };
-            match current_ebn0 {
-                Some(ebn0) if ebn0 == stats.ebn0_db => {
+            if let Some(s) = &last_stats {
+                if s.ebn0_db != stats.ebn0_db {
+                    if let Some(f) = &mut self.output_file {
+                        writeln!(f, "{}", &Self::format_progress(s))?;
+                    }
+                }
+            }
+            match &last_stats {
+                Some(s) if s.ebn0_db == stats.ebn0_db => {
                     self.term.move_cursor_up(1)?;
                     self.term.clear_line()?;
                 }
                 _ => (),
             };
-            current_ebn0 = Some(stats.ebn0_db);
             self.term.write_line(&Self::format_progress(&stats))?;
+            last_stats = Some(stats);
         }
     }
 
