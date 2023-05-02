@@ -54,6 +54,11 @@ pub trait DecoderArithmetic: std::fmt::Debug + Send {
     ///
     /// Defines the type used to represent variable node messages.
     type VarMessage: std::fmt::Debug + Copy + Default + Send;
+    /// Variable LLR.
+    ///
+    /// Defines the type used to represent variable node LLRs in the horizontal
+    /// layered schedule.
+    type VarLlr: std::fmt::Debug + Copy + Default + Send;
 
     /// Quantization function for input LLRs.
     ///
@@ -72,6 +77,16 @@ pub trait DecoderArithmetic: std::fmt::Debug + Send {
     /// the first iteration of the belief propagation algorithm, where the
     /// variable messages are simply the channel LLRs.
     fn llr_to_var_message(&self, llr: Self::Llr) -> Self::VarMessage;
+
+    /// Transform LLR to variable LLR.
+    ///
+    /// Defines how to transform an LLR into a variable node LLR.
+    fn llr_to_var_llr(&self, llr: Self::Llr) -> Self::VarLlr;
+
+    /// Transform variable LLR to LLR.
+    ///
+    /// Defines how to transform a variable LLR into an LLR.
+    fn var_llr_to_llr(&self, var_llr: Self::VarLlr) -> Self::Llr;
 
     /// Send check messages from a check node.
     ///
@@ -106,6 +121,19 @@ pub trait DecoderArithmetic: std::fmt::Debug + Send {
     ) -> Self::Llr
     where
         F: FnMut(SentMessage<Self::VarMessage>);
+
+    /// Update check messages and variable values for a check node.
+    ///
+    /// This function is used in the horizontal layered decoder. It is called
+    /// with the messages sent by a check node and the list of LLRs of all the
+    /// variables. The function computes and updates the new check messages and
+    /// the new variable LLRs (for the variables directly connected to this
+    /// check messages).
+    fn update_check_messages_and_vars(
+        &mut self,
+        check_messages: &mut [SentMessage<Self::CheckMessage>],
+        vars: &mut [Self::VarLlr],
+    );
 }
 
 // The usual variable message update rule, without any clipping.
@@ -161,6 +189,7 @@ macro_rules! impl_phif {
             type Llr = $f;
             type CheckMessage = $f;
             type VarMessage = $f;
+            type VarLlr = $f;
 
             fn input_llr_quantize(&self, llr: f64) -> $f {
                 llr as $f
@@ -172,6 +201,14 @@ macro_rules! impl_phif {
 
             fn llr_to_var_message(&self, llr: $f) -> $f {
                 llr
+            }
+
+            fn llr_to_var_llr(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn var_llr_to_llr(&self, var_llr: $f) -> $f {
+                var_llr
             }
 
             fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
@@ -219,6 +256,40 @@ macro_rules! impl_phif {
             {
                 send_var_messages_no_clip(input_llr, check_messages, send)
             }
+
+            fn update_check_messages_and_vars(
+                &mut self,
+                check_messages: &mut [SentMessage<$f>],
+                vars: &mut [$f],
+            ) {
+                // Compute combination of all variables messages
+                let mut sign: u32 = 0;
+                let mut sum = 0.0;
+                if self.phis.len() < check_messages.len() {
+                    self.phis.resize(check_messages.len(), 0.0);
+                }
+                for (msg, phi) in check_messages.iter().zip(self.phis.iter_mut()) {
+                    // Subtract contribution of this check node message
+                    let x = vars[msg.dest] - msg.value;
+                    let phi_x = Self::phi(x.abs());
+                    *phi = phi_x;
+                    sum += phi_x;
+                    if x < 0.0 {
+                        sign ^= 1;
+                    }
+                }
+
+                // Exclude the contribution of each variable to generate new
+                // check message for that variable. Update variable.
+                for (msg, phi) in check_messages.iter_mut().zip(self.phis.iter()) {
+                    let x = vars[msg.dest] - msg.value;
+                    let rcv = Self::phi(sum - phi);
+                    let s = if x < 0.0 { sign ^ 1 } else { sign };
+                    let rcv = if s == 0 { rcv } else { -rcv };
+                    msg.value = rcv;
+                    vars[msg.dest] = x + rcv;
+                }
+            }
         }
     };
 }
@@ -251,6 +322,7 @@ macro_rules! impl_tanhf {
             type Llr = $f;
             type CheckMessage = $f;
             type VarMessage = $f;
+            type VarLlr = $f;
 
             fn input_llr_quantize(&self, llr: f64) -> $f {
                 llr as $f
@@ -262,6 +334,14 @@ macro_rules! impl_tanhf {
 
             fn llr_to_var_message(&self, llr: $f) -> $f {
                 llr
+            }
+
+            fn llr_to_var_llr(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn var_llr_to_llr(&self, var_llr: $f) -> $f {
+                var_llr
             }
 
             fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
@@ -309,6 +389,41 @@ macro_rules! impl_tanhf {
             {
                 send_var_messages_no_clip(input_llr, check_messages, send)
             }
+
+            fn update_check_messages_and_vars(
+                &mut self,
+                check_messages: &mut [SentMessage<$f>],
+                vars: &mut [$f],
+            ) {
+                // Compute tanh's of all variable messages
+                if self.tanhs.len() < check_messages.len() {
+                    self.tanhs.resize(check_messages.len(), 0.0);
+                }
+                for (msg, tanh) in check_messages.iter().zip(self.tanhs.iter_mut()) {
+                    let x = vars[msg.dest] - msg.value;
+                    let t = (0.5 * x).clamp(-$tanh_clamp, $tanh_clamp).tanh();
+                    *tanh = t;
+                }
+
+                for j in 0..check_messages.len() {
+                    // product of all the tanh's except that of exclude_msg
+                    let exclude_msg = &check_messages[j];
+                    let product = check_messages
+                        .iter()
+                        .zip(self.tanhs.iter())
+                        .filter_map(|(msg, tanh)| {
+                            if msg.dest != exclude_msg.dest {
+                                Some(tanh)
+                            } else {
+                                None
+                            }
+                        })
+                        .product::<$f>();
+                    let rcv = 2.0 * product.atanh();
+                    vars[exclude_msg.dest] += rcv - exclude_msg.value;
+                    check_messages[j].value = rcv;
+                }
+            }
         }
     };
 }
@@ -332,7 +447,9 @@ macro_rules! impl_minstarapproxf {
         ///
         /// See (35) in [1].
         #[derive(Debug, Clone, Default)]
-        pub struct $ty {}
+        pub struct $ty {
+            minstars: Vec<$f>,
+        }
 
         impl $ty {
             /// Creates a new [`$ty`] decoder arithmetic object.
@@ -345,6 +462,7 @@ macro_rules! impl_minstarapproxf {
             type Llr = $f;
             type CheckMessage = $f;
             type VarMessage = $f;
+            type VarLlr = $f;
 
             fn input_llr_quantize(&self, llr: f64) -> $f {
                 llr as $f
@@ -356,6 +474,14 @@ macro_rules! impl_minstarapproxf {
 
             fn llr_to_var_message(&self, llr: $f) -> $f {
                 llr
+            }
+
+            fn llr_to_var_llr(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn var_llr_to_llr(&self, var_llr: $f) -> $f {
+                var_llr
             }
 
             fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
@@ -405,6 +531,47 @@ macro_rules! impl_minstarapproxf {
             {
                 send_var_messages_no_clip(input_llr, check_messages, send)
             }
+
+            fn update_check_messages_and_vars(
+                &mut self,
+                check_messages: &mut [SentMessage<$f>],
+                vars: &mut [$f],
+            ) {
+                // Compute all min*'s
+                if self.minstars.len() < check_messages.len() {
+                    self.minstars.resize(check_messages.len(), 0.0);
+                }
+                for (exclude_msg, minstar) in check_messages.iter().zip(self.minstars.iter_mut()) {
+                    let mut sign: u32 = 0;
+                    let mut mstar = None;
+                    for msg in check_messages
+                        .iter()
+                        .filter(|msg| msg.dest != exclude_msg.dest)
+                    {
+                        let x = vars[msg.dest] - msg.value;
+                        if x < 0.0 {
+                            sign ^= 1;
+                        }
+                        let x = x.abs();
+                        mstar = Some(match mstar {
+                            None => x,
+                            // We clamp the output to 0 from below because we
+                            // are doing min* of positive numbers, but since
+                            // we've thrown away a positive term in the
+                            // approximation to min*, the approximation could
+                            // come out negative.
+                            Some(y) => (x.min(y) - (-(x - y).abs()).exp().ln_1p()).max(0.0),
+                        });
+                    }
+                    let mstar = mstar.expect("only one variable message connected to check node");
+                    *minstar = if sign == 0 { mstar } else { -mstar };
+                }
+                // Update Rcv's and Qv's
+                for (msg, &minstar) in check_messages.iter_mut().zip(self.minstars.iter()) {
+                    vars[msg.dest] += minstar - msg.value;
+                    msg.value = minstar;
+                }
+            }
         }
     };
 }
@@ -432,12 +599,15 @@ macro_rules! impl_8bitquant {
                     })
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
-                $ty { table }
+                $ty {
+                    table,
+                    _minstars: Vec::new(),
+                }
             }
 
-            fn lookup(&self, x: i8) -> i8 {
+            fn lookup(table: &[i8], x: i8) -> i8 {
                 assert!(x >= 0);
-                self.table.get(x as usize).copied().unwrap_or(0)
+                table.get(x as usize).copied().unwrap_or(0)
             }
 
             fn clip(x: i16) -> i8 {
@@ -499,6 +669,7 @@ macro_rules! impl_minstarapproxi8 {
         #[derive(Debug, Clone)]
         pub struct $ty {
             table: Box<[i8]>,
+            _minstars: Vec<i8>,
         }
 
         impl_8bitquant!($ty);
@@ -513,6 +684,11 @@ macro_rules! impl_minstarapproxi8 {
             type Llr = i8;
             type CheckMessage = i8;
             type VarMessage = i8;
+            // An i16 is used for variable LLRs so that the sum of the channel
+            // LLR (i8) and the N check node messages checking the variable can
+            // be stored without clipping (in general, ceil(log2(N)) bit growth
+            // is needed).
+            type VarLlr = i16;
 
             fn input_llr_quantize(&self, llr: f64) -> i8 {
                 let x = Self::QUANTIZER_C * llr;
@@ -531,6 +707,14 @@ macro_rules! impl_minstarapproxi8 {
 
             fn llr_to_var_message(&self, llr: i8) -> i8 {
                 llr
+            }
+
+            fn llr_to_var_llr(&self, llr: i8) -> i16 {
+                i16::from(llr)
+            }
+
+            fn var_llr_to_llr(&self, var_llr: i16) -> i8 {
+                Self::clip(var_llr)
             }
 
             fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
@@ -556,7 +740,7 @@ macro_rules! impl_minstarapproxi8 {
                             // we've thrown away a positive term in the
                             // approximation to min*, the approximation could
                             // come out negative.
-                            Some(y) => (x.min(y) - self.lookup((x - y).abs())).max(0),
+                            Some(y) => (x.min(y) - Self::lookup(&self.table, (x - y).abs())).max(0),
                         });
                     }
                     let minstar =
@@ -572,6 +756,50 @@ macro_rules! impl_minstarapproxi8 {
             }
 
             impl_send_var_messages_i8!($degree_one_clip, $jones_clip);
+
+            fn update_check_messages_and_vars(
+                &mut self,
+                check_messages: &mut [SentMessage<i8>],
+                vars: &mut [i16],
+            ) {
+                // Compute all min*'s
+                if self._minstars.len() < check_messages.len() {
+                    self._minstars.resize(check_messages.len(), 0);
+                }
+                for (exclude_msg, minstar) in check_messages.iter().zip(self._minstars.iter_mut()) {
+                    let mut sign: u32 = 0;
+                    let mut mstar = None;
+                    for msg in check_messages
+                        .iter()
+                        .filter(|msg| msg.dest != exclude_msg.dest)
+                    {
+                        let x = Self::clip(vars[msg.dest] - i16::from(msg.value));
+                        if x < 0 {
+                            sign ^= 1;
+                        }
+                        let x = x.abs();
+                        mstar = Some(match mstar {
+                            None => x,
+                            // We clamp the output to 0 from below because we
+                            // are doing min* of positive numbers, but since
+                            // we've thrown away a positive term in the
+                            // approximation to min*, the approximation could
+                            // come out negative.
+                            Some(y) => (x.min(y) - Self::lookup(&self.table, (x - y).abs())).max(0),
+                        });
+                    }
+                    let mstar = mstar.expect("only one variable message connected to check node");
+                    let mstar = if sign == 0 { mstar } else { -mstar };
+                    // Optional partial hard-limiting
+                    let mstar = $check_hardlimit(mstar);
+                    *minstar = mstar;
+                }
+                // Update Rcv's and Qv's
+                for (msg, &minstar) in check_messages.iter_mut().zip(self._minstars.iter()) {
+                    vars[msg.dest] += i16::from(minstar) - i16::from(msg.value);
+                    msg.value = minstar;
+                }
+            }
         }
     };
 }
@@ -690,6 +918,7 @@ macro_rules! impl_aminstarf {
             type Llr = $f;
             type CheckMessage = $f;
             type VarMessage = $f;
+            type VarLlr = $f;
 
             fn input_llr_quantize(&self, llr: f64) -> $f {
                 llr as $f
@@ -701,6 +930,14 @@ macro_rules! impl_aminstarf {
 
             fn llr_to_var_message(&self, llr: $f) -> $f {
                 llr
+            }
+
+            fn llr_to_var_llr(&self, llr: $f) -> $f {
+                llr
+            }
+
+            fn var_llr_to_llr(&self, var_llr: $f) -> $f {
+                var_llr
             }
 
             fn send_check_messages<F>(&mut self, var_messages: &[Message<$f>], mut send: F)
@@ -775,6 +1012,61 @@ macro_rules! impl_aminstarf {
             {
                 send_var_messages_no_clip(input_llr, check_messages, send)
             }
+
+            fn update_check_messages_and_vars(
+                &mut self,
+                check_messages: &mut [SentMessage<$f>],
+                vars: &mut [$f],
+            ) {
+                let (argmin, msgmin) = check_messages
+                    .iter()
+                    .map(|msg| vars[msg.dest] - msg.value)
+                    .enumerate()
+                    .min_by(|(_, msg1), (_, msg2)| msg1.abs().partial_cmp(&msg2.abs()).unwrap())
+                    .expect("var_messages is empty");
+                let mut sign: u32 = 0;
+                let mut delta = None;
+                for (j, msg) in check_messages.iter().enumerate() {
+                    let x = vars[msg.dest] - msg.value;
+                    if x < 0.0 {
+                        sign ^= 1;
+                    }
+                    if j != argmin {
+                        let x = x.abs();
+                        delta = Some(match delta {
+                            None => x,
+                            Some(y) => {
+                                (x.min(y) - (-(x - y).abs()).exp().ln_1p()
+                                    + (-(x + y)).exp().ln_1p())
+                            }
+                        });
+                    }
+                }
+                let delta = delta.expect("var_messages_empty");
+                let msgmin_rcv = if (sign != 0) ^ (msgmin < 0.0) {
+                    -delta
+                } else {
+                    delta
+                };
+
+                let vmin = msgmin.abs();
+                let delta = delta.min(vmin) - (-(delta - vmin).abs()).exp().ln_1p()
+                    + (-(delta + vmin)).exp().ln_1p();
+                for (j, msg) in check_messages.iter_mut().enumerate() {
+                    let x = vars[msg.dest] - msg.value;
+                    let rcv = if j == argmin {
+                        msgmin_rcv
+                    } else {
+                        if (sign != 0) ^ (x < 0.0) {
+                            -delta
+                        } else {
+                            delta
+                        }
+                    };
+                    msg.value = rcv;
+                    vars[msg.dest] = x + rcv;
+                }
+            }
         }
     };
 }
@@ -793,6 +1085,7 @@ macro_rules! impl_aminstari8 {
         #[derive(Debug, Clone, Default)]
         pub struct $ty {
             table: Box<[i8]>,
+            _minstars: Vec<i8>,
         }
 
         impl_8bitquant!($ty);
@@ -801,6 +1094,7 @@ macro_rules! impl_aminstari8 {
             type Llr = i8;
             type CheckMessage = i8;
             type VarMessage = i8;
+            type VarLlr = i16;
 
             fn input_llr_quantize(&self, llr: f64) -> i8 {
                 let x = Self::QUANTIZER_C * llr;
@@ -819,6 +1113,14 @@ macro_rules! impl_aminstari8 {
 
             fn llr_to_var_message(&self, llr: i8) -> i8 {
                 llr
+            }
+
+            fn llr_to_var_llr(&self, llr: i8) -> i16 {
+                i16::from(llr)
+            }
+
+            fn var_llr_to_llr(&self, var_llr: i16) -> i8 {
+                Self::clip(var_llr)
             }
 
             fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
@@ -846,8 +1148,8 @@ macro_rules! impl_aminstari8 {
                             // we've thrown away a positive term in the
                             // approximation to min*, the approximation could
                             // come out negative.
-                            Some(y) => (x.min(y) - self.lookup((x - y).abs())
-                                + self.lookup(x.saturating_add(y)))
+                            Some(y) => (x.min(y) - Self::lookup(&self.table, (x - y).abs())
+                                + Self::lookup(&self.table, x.saturating_add(y)))
                             .max(0),
                         });
                     }
@@ -865,8 +1167,8 @@ macro_rules! impl_aminstari8 {
                 });
 
                 let vmin = msgmin.value.abs();
-                let delta = (delta.min(vmin) - self.lookup((delta - vmin).abs())
-                    + self.lookup(delta.saturating_add(vmin)))
+                let delta = (delta.min(vmin) - Self::lookup(&self.table, (delta - vmin).abs())
+                    + Self::lookup(&self.table, delta.saturating_add(vmin)))
                 .max(0);
                 let delta_hl = $check_hardlimit(delta);
                 for msg in var_messages.iter().enumerate().filter_map(|(j, msg)| {
@@ -888,6 +1190,68 @@ macro_rules! impl_aminstari8 {
             }
 
             impl_send_var_messages_i8!($degree_one_clip, $jones_clip);
+
+            fn update_check_messages_and_vars(
+                &mut self,
+                check_messages: &mut [SentMessage<i8>],
+                vars: &mut [i16],
+            ) {
+                let (argmin, msgmin) = check_messages
+                    .iter()
+                    .map(|msg| Self::clip(vars[msg.dest] - i16::from(msg.value)))
+                    .enumerate()
+                    .min_by_key(|(_, msg)| msg.abs())
+                    .expect("var_messages is empty");
+                let mut sign: u32 = 0;
+                let mut delta = None;
+                for (j, msg) in check_messages.iter().enumerate() {
+                    let x = Self::clip(vars[msg.dest] - i16::from(msg.value));
+                    if x < 0 {
+                        sign ^= 1;
+                    }
+                    if j != argmin {
+                        let x = x.abs();
+                        delta = Some(match delta {
+                            None => x,
+                            // We clamp the output to 0 from below because we
+                            // are doing min* of positive numbers, but since
+                            // we've thrown away a positive term in the
+                            // approximation to min*, the approximation could
+                            // come out negative.
+                            Some(y) => (x.min(y) - Self::lookup(&self.table, (x - y).abs())
+                                + Self::lookup(&self.table, x.saturating_add(y)))
+                            .max(0),
+                        });
+                    }
+                }
+                let delta = delta.expect("var_messages_empty");
+                let delta_hl = $check_hardlimit(delta);
+                let msgmin_rcv = if (sign != 0) ^ (msgmin < 0) {
+                    -delta_hl
+                } else {
+                    delta_hl
+                };
+
+                let vmin = msgmin.abs();
+                let delta = (delta.min(vmin) - Self::lookup(&self.table, (delta - vmin).abs())
+                    + Self::lookup(&self.table, delta.saturating_add(vmin)))
+                .max(0);
+                let delta_hl = $check_hardlimit(delta);
+                for (j, msg) in check_messages.iter_mut().enumerate() {
+                    let x = vars[msg.dest] - i16::from(msg.value);
+                    let rcv = if j == argmin {
+                        msgmin_rcv
+                    } else {
+                        if (sign != 0) ^ (x < 0) {
+                            -delta_hl
+                        } else {
+                            delta_hl
+                        }
+                    };
+                    vars[msg.dest] = x + i16::from(rcv);
+                    msg.value = rcv;
+                }
+            }
         }
     };
 }

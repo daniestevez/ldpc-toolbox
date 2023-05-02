@@ -1,43 +1,11 @@
 //! LDPC decoder factory.
 //!
-//! This module contains routines to build an LDPC decoder generically over the
-//! arithmetic implementation. Such decoders are represented by `Box<dyn
-//! LdpcDecoder>`, using the trait [`LdpcDecoder`].
+//! This module contains routines to build an LDPC decoder generically over
+//! different internal implementations. Such decoders are represented by
+//! `Box<dyn LdpcDecoder>`, using the trait [`LdpcDecoder`].
 
-use super::{arithmetic::*, Decoder, DecoderOutput};
+use super::{arithmetic::*, flooding, horizontal_layered, LdpcDecoder};
 use crate::sparse::SparseMatrix;
-
-/// Generic LDPC decoder.
-///
-/// This trait is used to form LDPC decoder trait objects, abstracting over the
-/// implementation of the decoder arithmetic.
-pub trait LdpcDecoder: std::fmt::Debug + Send {
-    /// Decodes a codeword.
-    ///
-    /// The parameters are the LLRs for the received codeword and the maximum
-    /// number of iterations to perform. If decoding is successful, the function
-    /// returns an `Ok` containing the (hard decision) on the decoded codeword
-    /// and the number of iterations used in decoding. If decoding is not
-    /// successful, the function returns an `Err` containing the hard decision
-    /// on the final decoder LLRs (which still has some bit errors) and the
-    /// number of iterations used in decoding (which is equal to
-    /// `max_iterations`).
-    fn decode(
-        &mut self,
-        llrs: &[f64],
-        max_iterations: usize,
-    ) -> Result<DecoderOutput, DecoderOutput>;
-}
-
-impl<A: DecoderArithmetic> LdpcDecoder for Decoder<A> {
-    fn decode(
-        &mut self,
-        llrs: &[f64],
-        max_iterations: usize,
-    ) -> Result<DecoderOutput, DecoderOutput> {
-        Decoder::decode(self, llrs, max_iterations)
-    }
-}
 
 /// LDPC decoder implementation.
 ///
@@ -45,108 +13,173 @@ impl<A: DecoderArithmetic> LdpcDecoder for Decoder<A> {
 /// arithmetic rules.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum DecoderImplementation {
-    /// The [`Phif64`] implementation, using `f64` and the involution `phi(x)`.
+    /// The [`Phif64`] implementation, using `f64` and the involution
+    /// `phi(x)`. This uses a flooding schedule.
     Phif64,
-    /// The [`Phif32`] implementation, using `f32` and the involution `phi(x)`.
+    /// The [`Phif32`] implementation, using `f32` and the involution
+    /// `phi(x)`. This uses a flooding schedule.
     Phif32,
-    /// The [`Tanhf64`] implementation, using `f64` and the tanh rule.
+    /// The [`Tanhf64`] implementation, using `f64` and the tanh rule. This uses
+    /// a flooding schedule.
     Tanhf64,
-    /// The [`Tanhf32`] implementation, using `f32` and the tanh rule.
+    /// The [`Tanhf32`] implementation, using `f32` and the tanh rule. This uses
+    /// a flooding schedule.
     Tanhf32,
     /// The [`Minstarapproxf64`] implementation, using `f64` and an
-    /// approximation to the min* function.
+    /// approximation to the min* function. This uses a flooding schedule.
     Minstarapproxf64,
     /// The [`Minstarapproxf32`] implementation, using `f32` and an
-    /// approximation to the min* function.
+    /// approximation to the min* function. This uses a flooding schedule.
     Minstarapproxf32,
     /// The [`Minstarapproxi8`] implementation, using 8-bit quantization and a
     /// quantized approximation to the min* function (implemented using small
-    /// table lookup).
+    /// table lookup). This uses a flooding schedule.
     Minstarapproxi8,
     /// The [`Minstarapproxi8Jones`] implementation, using 8-bit quantization, a
     /// quantized approximation to the min* function (implemented using small
-    /// table lookup), and Jones clipping for variable nodes.
+    /// table lookup), and Jones clipping for variable nodes. This uses a
+    /// flooding schedule.
     Minstarapproxi8Jones,
     /// The [`Minstarapproxi8PartialHardLimit`] implementation, using 8-bit
     /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), and partial hard-limiting for
-    /// check nodes.
+    /// check nodes. This uses a flooding schedule.
     Minstarapproxi8PartialHardLimit,
     /// The [`Minstarapproxi8JonesPartialHardLimit`] implementation, using 8-bit
     /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), Jones clipping for variable
-    /// nodes, and partial hard-limiting for check nodes.
+    /// nodes, and partial hard-limiting for check nodes. This uses a flooding
+    /// schedule.
     Minstarapproxi8JonesPartialHardLimit,
     /// The [`Minstarapproxi8Deg1Clip`] implementation, using 8-bit
     /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), and degree-1 variable node
-    /// clipping.
+    /// clipping. This uses a flooding schedule.
     Minstarapproxi8Deg1Clip,
     /// The [`Minstarapproxi8JonesDeg1Clip`] implementation, using 8-bit
     /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), Jones clipping for variable
-    /// nodes, and degree-1 variable node clipping.
+    /// nodes, and degree-1 variable node clipping. This uses a flooding
+    /// schedule.
     Minstarapproxi8JonesDeg1Clip,
     /// The [`Minstarapproxi8PartialHardLimitDeg1Clip`] implementation, using
     /// 8-bit quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), partial hard-limiting for check
-    /// nodes, and degree-1 variable node clipping.
+    /// nodes, and degree-1 variable node clipping. This uses a flooding
+    /// schedule.
     Minstarapproxi8PartialHardLimitDeg1Clip,
     /// The [`Minstarapproxi8JonesPartialHardLimitDeg1Clip`] implementation,
     /// using 8-bit quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), Jones clipping for variable
     /// nodes, partial hard-limiting for check nodes, and degree-1 variable node
-    /// clipping.
+    /// clipping. This uses a flooding schedule.
     Minstarapproxi8JonesPartialHardLimitDeg1Clip,
     /// The [`Aminstarf64`] implementation, using `f64` and an approximation to
-    /// the min* function.
+    /// the min* function. This uses a flooding schedule.
     Aminstarf64,
     /// The [`Aminstarf32`] implementation, using `f32` and an approximation to
-    /// the min* function.
+    /// the min* function. This uses a flooding schedule.
     Aminstarf32,
     /// The [`Aminstari8`] implementation, using 8-bit quantization and a
     /// quantized approximation to the min* function (implemented using small
-    /// table lookup).
+    /// table lookup). This uses a flooding schedule.
     Aminstari8,
     /// The [`Aminstari8Jones`] implementation, using 8-bit quantization, a
     /// quantized approximation to the min* function (implemented using small
-    /// table lookup), and Jones clipping for variable nodes.
+    /// table lookup), and Jones clipping for variable nodes. This uses a
+    /// flooding schedule.
     Aminstari8Jones,
     /// The [`Aminstari8PartialHardLimit`] implementation, using 8-bit
     /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), and partial hard-limiting for
-    /// check nodes.
+    /// check nodes. This uses a flooding schedule.
     Aminstari8PartialHardLimit,
     /// The [`Aminstari8JonesPartialHardLimit`] implementation, using 8-bit
     /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), Jones clipping for variable
-    /// nodes, and partial hard-limiting for check nodes.
+    /// nodes, and partial hard-limiting for check nodes. This uses a flooding
+    /// schedule.
     Aminstari8JonesPartialHardLimit,
-    /// The [`Aminstari8Deg1Clip`] implementation, using 8-bit
-    /// quantization, a quantized approximation to the min* function
-    /// (implemented using small table lookup), and degree-1 variable node
-    /// clipping.
+    /// The [`Aminstari8Deg1Clip`] implementation, using 8-bit quantization, a
+    /// quantized approximation to the min* function (implemented using small
+    /// table lookup), and degree-1 variable node clipping. This uses a flooding
+    /// schedule.
     Aminstari8Deg1Clip,
     /// The [`Aminstari8JonesDeg1Clip`] implementation, using 8-bit
     /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), Jones clipping for variable
-    /// nodes, and degree-1 variable node clipping.
+    /// nodes, and degree-1 variable node clipping. This uses a flooding
+    /// schedule.
     Aminstari8JonesDeg1Clip,
-    /// The [`Aminstari8PartialHardLimitDeg1Clip`] implementation, using
-    /// 8-bit quantization, a quantized approximation to the min* function
+    /// The [`Aminstari8PartialHardLimitDeg1Clip`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), partial hard-limiting for check
-    /// nodes, and degree-1 variable node clipping.
+    /// nodes, and degree-1 variable node clipping. This uses a flooding
+    /// schedule.
     Aminstari8PartialHardLimitDeg1Clip,
-    /// The [`Aminstari8JonesPartialHardLimitDeg1Clip`] implementation,
-    /// using 8-bit quantization, a quantized approximation to the min* function
+    /// The [`Aminstari8JonesPartialHardLimitDeg1Clip`] implementation, using
+    /// 8-bit quantization, a quantized approximation to the min* function
     /// (implemented using small table lookup), Jones clipping for variable
     /// nodes, partial hard-limiting for check nodes, and degree-1 variable node
-    /// clipping.
+    /// clipping. This uses a flooding schedule.
     Aminstari8JonesPartialHardLimitDeg1Clip,
+    /// The [`Phif64`] implementation, using `f64` and the involution
+    /// `phi(x)`. This uses a horizontal layered schedule.
+    HLPhif64,
+    /// The [`Phif32`] implementation, using `f32` and the involution
+    /// `phi(x)`. This uses a horizontal layered schedule.
+    HLPhif32,
+    /// The [`Tanhf64`] implementation, using `f64` and the tanh rule. This uses
+    /// a horizontal layered schedule.
+    HLTanhf64,
+    /// The [`Tanhf32`] implementation, using `f32` and the tanh rule. This uses
+    /// a horizontal layered schedule.
+    HLTanhf32,
+    /// The [`Minstarapproxf64`] implementation, using `f64` and an
+    /// approximation to the min* function. This uses a horizontal layered
+    /// schedule.
+    HLMinstarapproxf64,
+    /// The [`Minstarapproxf32`] implementation, using `f32` and an
+    /// approximation to the min* function. This uses a horizontal layered
+    /// schedule.
+    HLMinstarapproxf32,
+    /// The [`Minstarapproxi8`] implementation, using 8-bit quantization and a
+    /// quantized approximation to the min* function (implemented using small
+    /// table lookup). This uses a horizontal layered schedule.
+    HLMinstarapproxi8,
+    /// The [`Minstarapproxi8PartialHardLimit`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), and partial hard-limiting for
+    /// check nodes. This uses a horizontal layered schedule.
+    HLMinstarapproxi8PartialHardLimit,
+    /// The [`Aminstarf64`] implementation, using `f64` and an approximation to
+    /// the min* function. This uses a horizontal layered schedule.
+    HLAminstarf64,
+    /// The [`Aminstarf32`] implementation, using `f32` and an approximation to
+    /// the min* function. This uses a horizontal layered schedule.
+    HLAminstarf32,
+    /// The [`Aminstari8`] implementation, using 8-bit quantization and a
+    /// quantized approximation to the min* function (implemented using small
+    /// table lookup). This uses a horizontal layered schedule.
+    HLAminstari8,
+    /// The [`Aminstari8PartialHardLimit`] implementation, using 8-bit
+    /// quantization, a quantized approximation to the min* function
+    /// (implemented using small table lookup), and partial hard-limiting for
+    /// check nodes. This uses a horizontal layered schedule.
+    HLAminstari8PartialHardLimit,
+}
+
+macro_rules! new_decoder {
+    (flooding, $arith:ty, $h:expr) => {
+        flooding::Decoder::new($h, <$arith>::new())
+    };
+    (horizontal_layered, $arith:ty, $h:expr) => {
+        horizontal_layered::Decoder::new($h, <$arith>::new())
+    };
 }
 
 macro_rules! impl_decoderimplementation {
-    ($($var:path, $arith:ident, $text:expr);+;) => {
+    ($($var:path, $arith:ty, $decoder:tt, $text:expr);+;) => {
         impl DecoderImplementation {
             /// Builds and LDPC decoder.
             ///
@@ -155,7 +188,7 @@ macro_rules! impl_decoderimplementation {
             pub fn build_decoder(&self, h: SparseMatrix) -> Box<dyn LdpcDecoder> {
                 match self {
                     $(
-                        $var => Box::new(Decoder::new(h, $arith::new())),
+                        $var => Box::new(new_decoder!($decoder, $arith, h)),
                     )+
                 }
             }
@@ -191,28 +224,40 @@ macro_rules! impl_decoderimplementation {
 }
 
 impl_decoderimplementation!(
-    DecoderImplementation::Phif64, Phif64, "Phif64";
-    DecoderImplementation::Phif32, Phif32, "Phif32";
-    DecoderImplementation::Tanhf64, Tanhf64, "Tanhf64";
-    DecoderImplementation::Tanhf32, Tanhf32, "Tanhf32";
-    DecoderImplementation::Minstarapproxf64, Minstarapproxf64, "Minstarapproxf64";
-    DecoderImplementation::Minstarapproxf32, Minstarapproxf32, "Minstarapproxf32";
-    DecoderImplementation::Minstarapproxi8, Minstarapproxi8, "Minstarapproxi8";
-    DecoderImplementation::Minstarapproxi8Jones, Minstarapproxi8Jones, "Minstarapproxi8Jones";
-    DecoderImplementation::Minstarapproxi8PartialHardLimit, Minstarapproxi8PartialHardLimit, "Minstarapproxi8PartialHardLimit";
-    DecoderImplementation::Minstarapproxi8JonesPartialHardLimit, Minstarapproxi8JonesPartialHardLimit, "Minstarapproxi8JonesPartialHardLimit";
-    DecoderImplementation::Minstarapproxi8Deg1Clip, Minstarapproxi8Deg1Clip, "Minstarapproxi8Deg1Clip";
-    DecoderImplementation::Minstarapproxi8JonesDeg1Clip, Minstarapproxi8JonesDeg1Clip, "Minstarapproxi8JonesDeg1Clip";
-    DecoderImplementation::Minstarapproxi8PartialHardLimitDeg1Clip, Minstarapproxi8PartialHardLimitDeg1Clip, "Minstarapproxi8PartialHardLimitDeg1Clip";
-    DecoderImplementation::Minstarapproxi8JonesPartialHardLimitDeg1Clip, Minstarapproxi8JonesPartialHardLimitDeg1Clip, "Minstarapproxi8JonesPartialHardLimitDeg1Clip";
-    DecoderImplementation::Aminstarf64, Aminstarf64, "Aminstarf64";
-    DecoderImplementation::Aminstarf32, Aminstarf32, "Aminstarf32";
-    DecoderImplementation::Aminstari8, Aminstari8, "Aminstari8";
-    DecoderImplementation::Aminstari8Jones, Aminstari8Jones, "Aminstari8Jones";
-    DecoderImplementation::Aminstari8PartialHardLimit, Aminstari8PartialHardLimit, "Aminstari8PartialHardLimit";
-    DecoderImplementation::Aminstari8JonesPartialHardLimit, Aminstari8JonesPartialHardLimit, "Aminstari8JonesPartialHardLimit";
-    DecoderImplementation::Aminstari8Deg1Clip, Aminstari8Deg1Clip, "Aminstari8Deg1Clip";
-    DecoderImplementation::Aminstari8JonesDeg1Clip, Aminstari8JonesDeg1Clip, "Aminstari8JonesDeg1Clip";
-    DecoderImplementation::Aminstari8PartialHardLimitDeg1Clip, Aminstari8PartialHardLimitDeg1Clip, "Aminstari8PartialHardLimitDeg1Clip";
-    DecoderImplementation::Aminstari8JonesPartialHardLimitDeg1Clip, Aminstari8JonesPartialHardLimitDeg1Clip, "Aminstari8JonesPartialHardLimitDeg1Clip";
+    DecoderImplementation::Phif64, Phif64, flooding, "Phif64";
+    DecoderImplementation::Phif32, Phif32, flooding, "Phif32";
+    DecoderImplementation::Tanhf64, Tanhf64, flooding, "Tanhf64";
+    DecoderImplementation::Tanhf32, Tanhf32, flooding, "Tanhf32";
+    DecoderImplementation::Minstarapproxf64, Minstarapproxf64, flooding, "Minstarapproxf64";
+    DecoderImplementation::Minstarapproxf32, Minstarapproxf32, flooding, "Minstarapproxf32";
+    DecoderImplementation::Minstarapproxi8, Minstarapproxi8, flooding, "Minstarapproxi8";
+    DecoderImplementation::Minstarapproxi8Jones, Minstarapproxi8Jones, flooding, "Minstarapproxi8Jones";
+    DecoderImplementation::Minstarapproxi8PartialHardLimit, Minstarapproxi8PartialHardLimit, flooding, "Minstarapproxi8PartialHardLimit";
+    DecoderImplementation::Minstarapproxi8JonesPartialHardLimit, Minstarapproxi8JonesPartialHardLimit, flooding, "Minstarapproxi8JonesPartialHardLimit";
+    DecoderImplementation::Minstarapproxi8Deg1Clip, Minstarapproxi8Deg1Clip, flooding, "Minstarapproxi8Deg1Clip";
+    DecoderImplementation::Minstarapproxi8JonesDeg1Clip, Minstarapproxi8JonesDeg1Clip, flooding, "Minstarapproxi8JonesDeg1Clip";
+    DecoderImplementation::Minstarapproxi8PartialHardLimitDeg1Clip, Minstarapproxi8PartialHardLimitDeg1Clip, flooding, "Minstarapproxi8PartialHardLimitDeg1Clip";
+    DecoderImplementation::Minstarapproxi8JonesPartialHardLimitDeg1Clip, Minstarapproxi8JonesPartialHardLimitDeg1Clip, flooding, "Minstarapproxi8JonesPartialHardLimitDeg1Clip";
+    DecoderImplementation::Aminstarf64, Aminstarf64, flooding, "Aminstarf64";
+    DecoderImplementation::Aminstarf32, Aminstarf32, flooding, "Aminstarf32";
+    DecoderImplementation::Aminstari8, Aminstari8, flooding, "Aminstari8";
+    DecoderImplementation::Aminstari8Jones, Aminstari8Jones, flooding, "Aminstari8Jones";
+    DecoderImplementation::Aminstari8PartialHardLimit, Aminstari8PartialHardLimit, flooding, "Aminstari8PartialHardLimit";
+    DecoderImplementation::Aminstari8JonesPartialHardLimit, Aminstari8JonesPartialHardLimit, flooding, "Aminstari8JonesPartialHardLimit";
+    DecoderImplementation::Aminstari8Deg1Clip, Aminstari8Deg1Clip, flooding, "Aminstari8Deg1Clip";
+    DecoderImplementation::Aminstari8JonesDeg1Clip, Aminstari8JonesDeg1Clip, flooding, "Aminstari8JonesDeg1Clip";
+    DecoderImplementation::Aminstari8PartialHardLimitDeg1Clip, Aminstari8PartialHardLimitDeg1Clip, flooding, "Aminstari8PartialHardLimitDeg1Clip";
+    DecoderImplementation::Aminstari8JonesPartialHardLimitDeg1Clip, Aminstari8JonesPartialHardLimitDeg1Clip, flooding, "Aminstari8JonesPartialHardLimitDeg1Clip";
+    DecoderImplementation::HLPhif64, Phif64, horizontal_layered, "HLPhif64";
+    DecoderImplementation::HLPhif32, Phif32, horizontal_layered, "HLPhif32";
+    DecoderImplementation::HLTanhf64, Tanhf64, horizontal_layered, "HLTanhf64";
+    DecoderImplementation::HLTanhf32, Tanhf32, horizontal_layered, "HLTanhf32";
+    DecoderImplementation::HLMinstarapproxf64, Minstarapproxf64, horizontal_layered, "HLMinstarapproxf64";
+    DecoderImplementation::HLMinstarapproxf32, Minstarapproxf32, horizontal_layered, "HLMinstarapproxf32";
+    DecoderImplementation::HLMinstarapproxi8, Minstarapproxi8, horizontal_layered, "HLMinstarapproxi8";
+    DecoderImplementation::HLMinstarapproxi8PartialHardLimit, Minstarapproxi8PartialHardLimit, horizontal_layered, "HLMinstarapproxi8PartialHardLimit";
+    DecoderImplementation::HLAminstarf64, Aminstarf64, horizontal_layered, "HLAminstarf64";
+    DecoderImplementation::HLAminstarf32, Aminstarf32, horizontal_layered, "HLAminstarf32";
+    DecoderImplementation::HLAminstari8, Aminstari8, horizontal_layered, "HLAminstari8";
+    DecoderImplementation::HLAminstari8PartialHardLimit, Aminstari8, horizontal_layered, "HLAminstari8PartialHardLimit";
 );

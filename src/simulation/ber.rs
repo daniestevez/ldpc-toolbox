@@ -8,7 +8,7 @@ use super::{
     puncturing::Puncturer,
 };
 use crate::{
-    decoder::factory::{DecoderImplementation, LdpcDecoder},
+    decoder::{factory::DecoderImplementation, LdpcDecoder},
     encoder::{Encoder, Error},
     gf2::GF2,
     sparse::SparseMatrix,
