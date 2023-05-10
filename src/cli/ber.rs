@@ -123,7 +123,12 @@ impl Args {
     }
 }
 
-fn parse_puncturing_pattern(s: &str) -> Result<Vec<bool>, &'static str> {
+/// Parses a puncturing pattern.
+///
+/// This function parses a punturing pattern given as a string, converting it
+/// into a vector of bools. The format for the puncturing pattern should be
+/// like `"1,1,1,0"`.
+pub fn parse_puncturing_pattern(s: &str) -> Result<Vec<bool>, &'static str> {
     let mut v = Vec::new();
     for a in s.split(',') {
         v.push(match a {

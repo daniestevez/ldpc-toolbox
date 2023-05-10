@@ -11,6 +11,7 @@ use std::error::Error;
 pub mod ber;
 pub mod ccsds;
 pub mod dvbs2;
+pub mod encode;
 pub mod mackay_neal;
 pub mod peg;
 
@@ -28,6 +29,8 @@ pub enum Args {
     BER(ber::Args),
     /// ccsds subcommand
     CCSDS(ccsds::Args),
+    /// encode subcommand,
+    Encode(encode::Args),
     /// dvbs2 subcommand
     DVBS2(dvbs2::Args),
     /// mackay-neal subcommand
@@ -42,6 +45,7 @@ impl Run for Args {
             Args::BER(x) => x.run(),
             Args::CCSDS(x) => x.run(),
             Args::DVBS2(x) => x.run(),
+            Args::Encode(x) => x.run(),
             Args::MackayNeal(x) => x.run(),
             Args::PEG(x) => x.run(),
         }
