@@ -10,6 +10,7 @@
 
 #![warn(missing_docs)]
 
+mod c_api;
 pub mod cli;
 pub mod codes;
 pub mod decoder;

@@ -14,12 +14,17 @@ categories = ["mathematics", "science", "simulation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "ldpc_toolbox"
+crate-type = ["lib", "cdylib", "staticlib"]
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 console = "0.15"
 ctrlc = "3"
 enum-iterator = "1"
 humantime = "2"
+libc = "0.2"
 ndarray = "0.15"
 num_cpus = "1"
 num-traits = "0.2"
