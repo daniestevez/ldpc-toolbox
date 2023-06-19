@@ -20,6 +20,11 @@ int32_t ldpc_toolbox_decoder_decode_f32(void *decoder,
                                         const float *llrs, size_t llrs_len,
                                         uint32_t max_iterations);
 
+void *ldpc_toolbox_encoder_ctor(const char *alist, const char *puncturing);
+void ldpc_toolbox_encoder_dtor(void *encoder);
+void ldpc_toolbox_encoder_encode(void *encoder,
+                                 uint8_t *output, size_t output_len,
+                                 const uint8_t *input, size_t input_len);
 #ifdef __cplusplus
 }
 #endif

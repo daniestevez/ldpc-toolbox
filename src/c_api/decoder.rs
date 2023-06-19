@@ -1,3 +1,4 @@
+use super::{c_to_string, size_t_to_usize};
 use crate::{
     cli::ber::parse_puncturing_pattern,
     decoder::{factory::DecoderImplementation, LdpcDecoder},
@@ -8,7 +9,7 @@ use libc::size_t;
 use std::{
     convert::TryFrom,
     error::Error,
-    ffi::{c_char, c_void, CStr},
+    ffi::{c_char, c_void},
 };
 
 #[derive(Debug)]
@@ -62,10 +63,9 @@ unsafe extern "C" fn ldpc_toolbox_decoder_ctor(
     implementation: *const c_char,
     puncturing: *const c_char,
 ) -> *mut c_void {
-    let alist = String::from_utf8_lossy(CStr::from_ptr(alist).to_bytes()).to_string();
-    let implementation =
-        String::from_utf8_lossy(CStr::from_ptr(implementation).to_bytes()).to_string();
-    let puncturing = String::from_utf8_lossy(CStr::from_ptr(puncturing).to_bytes()).to_string();
+    let alist = c_to_string(alist);
+    let implementation = c_to_string(implementation);
+    let puncturing = c_to_string(puncturing);
     if let Ok(decoder) = Decoder::new(&alist, &implementation, &puncturing) {
         Box::into_raw(Box::new(decoder)) as *mut c_void
     } else {
@@ -87,8 +87,8 @@ unsafe extern "C" fn ldpc_toolbox_decoder_decode_f64(
     llrs_len: size_t,
     max_iterations: u32,
 ) -> i32 {
-    let output = std::slice::from_raw_parts_mut(output, usize::try_from(output_len).unwrap());
-    let llrs = std::slice::from_raw_parts(llrs, usize::try_from(llrs_len).unwrap());
+    let output = std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len));
+    let llrs = std::slice::from_raw_parts(llrs, size_t_to_usize(llrs_len));
     let decoder = &mut *(decoder as *mut Decoder);
     decoder.decode_f64(output, llrs, max_iterations)
 }
@@ -102,8 +102,8 @@ unsafe extern "C" fn ldpc_toolbox_decoder_decode_f32(
     llrs_len: size_t,
     max_iterations: u32,
 ) -> i32 {
-    let output = std::slice::from_raw_parts_mut(output, usize::try_from(output_len).unwrap());
-    let llrs = std::slice::from_raw_parts(llrs, usize::try_from(llrs_len).unwrap());
+    let output = std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len));
+    let llrs = std::slice::from_raw_parts(llrs, size_t_to_usize(llrs_len));
     let decoder = &mut *(decoder as *mut Decoder);
     decoder.decode_f32(output, llrs, max_iterations)
 }
