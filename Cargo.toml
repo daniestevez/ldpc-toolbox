@@ -18,6 +18,14 @@ categories = ["mathematics", "science", "simulation"]
 name = "ldpc_toolbox"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+# This needs to be present to avoid 'cargo doc' from generating documentation
+# for a binary crate named ldpc_toolbox, which clashes with the documentation
+# for the library crate.
+[[bin]]
+name = "ldpc-toolbox"
+doc = false
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 console = "0.15"
