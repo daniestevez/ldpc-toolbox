@@ -2,26 +2,27 @@
 //!
 //! This module contains the trait [`DecoderArithmetic`], which defines generic
 //! arithmetic rules used by a belief propagation LDPC decoder, and implementors
-//! of that trait. The LDCP decoder [`Decoder`](super::Decoder) is generic over
-//! the `DecoderArithmetic` trait, so it can be used to obtain monomorphized
+//! of that trait. The LDCP decoders, such as the flooding schedule
+//! [`Decoder`](super::flooding::Decoder), are generic over the
+//! `DecoderArithmetic` trait, so it can be used to obtain monomorphized
 //! implementations for different arithemtic rules.
 //!
 //! # References
 //!
 //! Most of the arithmetic rules implemented here are taken from:
 //!
-//! [1] Jon Hamkins, [Performance of Low-Density Parity-Check Coded Modulation](https://ipnpr.jpl.nasa.gov/progress_report/42-184/184D.pdf),
+//! \[1\] Jon Hamkins, [Performance of Low-Density Parity-Check Coded Modulation](https://ipnpr.jpl.nasa.gov/progress_report/42-184/184D.pdf),
 //! IPN Progress Report 42-184, February 15, 2011.
 //!
 //! Another good resource is this book:
 //!
-//! [2] Sarah J. Johnson, Iterative Error Correction: Turbo, Low-Density
+//! \[2\] Sarah J. Johnson, Iterative Error Correction: Turbo, Low-Density
 //! Parity-Check and Repeat-Accumulate Codes. Cambridge University Press. June
 //! 2012.
 //!
 //! Other references:
 //!
-//! [3] C. Jones, et al. “Approximate-MIN* Constraint Node Updating for LDPC
+//! \[3\] C. Jones, et al. “Approximate-MIN* Constraint Node Updating for LDPC
 //! Code Decoding.” In Proceedings of MILCOM 2003 (Boston, Massachusetts),
 //! 1-157-1-162. Piscataway, NJ: IEEE, October 2003.
 //!
@@ -35,8 +36,7 @@ use std::convert::identity;
 /// decoder. The trait defines the data types to use for LLRs and messages, and
 /// how to compute the check node and variable node messages.
 ///
-/// The LDPC decoder [`Decoder`](super::Decoder) is generic over objects
-/// implementing this trait.
+/// The LDPC decoders are generic over objects implementing this trait.
 ///
 /// The methods in this trait depend on `&self` or `&mut self` so that the
 /// decoder arithmetic object can have an internal state implement lookup
@@ -163,7 +163,7 @@ macro_rules! impl_phif {
         /// messages and computes the check node messages using the involution `phi(x) =
         /// -log(tanh(x/2))`.
         ///
-        /// See (2.33) in page 68 in [2].
+        /// See (2.33) in page 68 in \[2\].
         #[derive(Debug, Clone, Default)]
         pub struct $ty {
             phis: Vec<$f>,
@@ -305,7 +305,7 @@ macro_rules! impl_tanhf {
         /// and messages and computes the check node messages using the usual
         /// tanh product rule.
         ///
-        /// See (33) in [1].
+        /// See (33) in \[1\].
         #[derive(Debug, Clone, Default)]
         pub struct $ty {
             tanhs: Vec<$f>,
@@ -445,7 +445,7 @@ macro_rules! impl_minstarapproxf {
         /// and messages and computes the check node messages using an approximation
         /// to the min* rule.
         ///
-        /// See (35) in [1].
+        /// See (35) in \[1\].
         #[derive(Debug, Clone, Default)]
         pub struct $ty {
             minstars: Vec<$f>,
@@ -665,7 +665,7 @@ macro_rules! impl_minstarapproxi8 {
         /// and messages and computes the check node messages using an approximation
         /// to the min* rule.
         ///
-        /// See (36) in [1].
+        /// See (36) in \[1\].
         #[derive(Debug, Clone)]
         pub struct $ty {
             table: Box<[i8]>,
@@ -899,7 +899,7 @@ impl_minstarapproxi8!(
 
 macro_rules! impl_aminstarf {
     ($ty:ident, $f:ty) => {
-        /// LDPC decoder arithmetic with `$f` and the A-Min*-BP described in [3].
+        /// LDPC decoder arithmetic with `$f` and the A-Min*-BP described in \[3\].
         ///
         /// This is a [`DecoderArithmetic`] that uses `$f` to represent the LLRs
         /// and messages and computes the check node messages using an approximation
@@ -1077,7 +1077,7 @@ impl_aminstarf!(Aminstarf32, f32);
 macro_rules! impl_aminstari8 {
     ($ty:ident, $jones_clip:expr, $check_hardlimit:expr, $degree_one_clip:expr) => {
         /// LDPC decoder arithmetic with 8-bit quantization and the A-Min*-BP
-        /// described in [3].
+        /// described in \[3\].
         ///
         /// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
         /// and messages and computes the check node messages using an approximation
