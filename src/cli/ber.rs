@@ -1,6 +1,17 @@
 //! BER test CLI subcommand.
 //!
 //! This subcommand can be used to perform a BER test of an LDPC decoder.
+//!
+//! # Examples
+//!
+//! The CCSDS r=1/2, k=1024 LDPC code can be simulated with
+//! ```shell
+//! $ ldpc-toolbox ber --min-ebn0 0.0 --max-ebn0 2.05 --step-ebn0 0.1 \
+//!       --puncturing 1,1,1,1,0 ar4ja_1_2_1024.alist
+//! ```
+//!
+//! The alist file must have been generated previoulsy with the
+//! [ccsds](super::ccsds) subcommand.
 
 use crate::{
     cli::*,
