@@ -37,8 +37,11 @@ pub fn gauss_reduction<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) -> Re
         // Subtract to rows below to make zeros below diagonal
         for t in (j + 1)..n {
             let x = array[[t, j]];
-            for u in j..m {
-                array[[t, u]] = array[[t, u]] - x * array[[j, u]];
+            if !x.is_zero() {
+                // avoid calculations if we're subtracting zero
+                for u in j..m {
+                    array[[t, u]] = array[[t, u]] - x * array[[j, u]];
+                }
             }
         }
     }
@@ -48,8 +51,11 @@ pub fn gauss_reduction<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) -> Re
         // Subtract to rows above to make zeros above diagonal
         for t in 0..j {
             let x = array[[t, j]];
-            for u in j..m {
-                array[[t, u]] = array[[t, u]] - x * array[[j, u]];
+            if !x.is_zero() {
+                // avoid calculations if we're subtracting zero
+                for u in j..m {
+                    array[[t, u]] = array[[t, u]] - x * array[[j, u]];
+                }
             }
         }
     }
