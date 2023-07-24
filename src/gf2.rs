@@ -79,6 +79,19 @@ impl Div for GF2 {
     }
 }
 
+impl std::iter::Sum for GF2 {
+    fn sum<I>(iter: I) -> GF2
+    where
+        I: Iterator<Item = GF2>,
+    {
+        let mut sum = GF2::zero();
+        for a in iter {
+            sum += a;
+        }
+        sum
+    }
+}
+
 macro_rules! impl_ops {
     ($op:ident, $opmethod:ident, $opassign:ident, $opassign_method:ident) => {
         impl $op<&GF2> for GF2 {
@@ -141,5 +154,13 @@ mod test {
     #[should_panic]
     fn div_zero_by_zero() {
         let _a = GF2(0) / GF2(0);
+    }
+
+    #[test]
+    fn sum() {
+        assert_eq!([GF2(0), GF2(1), GF2(1)].into_iter().sum::<GF2>(), GF2(0));
+        assert_eq!([GF2(0), GF2(1)].into_iter().sum::<GF2>(), GF2(1));
+        assert_eq!([GF2(1)].into_iter().sum::<GF2>(), GF2(1));
+        assert_eq!([].into_iter().sum::<GF2>(), GF2(0));
     }
 }
