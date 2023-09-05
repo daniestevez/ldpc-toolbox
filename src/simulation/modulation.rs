@@ -3,10 +3,74 @@
 //! This module implements routines for modulation of bits to symbols and
 //! demodulation of symbols to LLRs.
 
+use super::channel::ChannelType;
 use crate::gf2::GF2;
 use ndarray::{ArrayBase, Data, Ix1};
 use num_complex::Complex;
 use num_traits::{One, Zero};
+
+/// Modulation.
+///
+/// This trait is used to define the modulations that can be handled by the
+/// simulation. It ties together a modulator and demodulator that work over the
+/// same channel type (either real or complex), and declares the number of bits
+/// per symbol of the modulation.
+pub trait Modulation: 'static {
+    /// Channel type.
+    ///
+    /// This is the scalar type for the symbols of the channel.
+    type T: ChannelType;
+    /// Modulator type.
+    type Modulator: Modulator<T = Self::T>;
+    /// Demodulator type.
+    type Demodulator: Demodulator<T = Self::T>;
+    /// Number of bits per symbol.
+    const BITS_PER_SYMBOL: f64;
+}
+
+/// Modulator.
+///
+/// This trait defines modulators, which can convert a sequence of bits into
+/// symbols.
+pub trait Modulator: Default + Clone + Send {
+    /// Scalar type for the symbols.
+    type T;
+
+    /// Modulates a sequence of bits into symbols.
+    fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<Self::T>
+    where
+        S: Data<Elem = GF2>;
+}
+
+/// Demodulator.
+///
+/// This trait defines demodulators, which can compute the bit LLRs for a
+/// sequence of symbols.
+pub trait Demodulator: Send {
+    /// Scalar type for the symbols.
+    type T;
+
+    /// Creates a new demodulator.
+    ///
+    /// The parameter `noise_sigma` indicates the channel noise standard
+    /// deviation in its real and imaginary part (or the channel noise standard
+    /// deviation if the channel is real).
+    fn from_noise_sigma(noise_sigma: f64) -> Self;
+
+    /// Returns the LLRs corresponding to a sequence of symbols.
+    fn demodulate(&self, symbols: &[Self::T]) -> Vec<f64>;
+}
+
+/// BPSK modulation
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct Bpsk {}
+
+impl Modulation for Bpsk {
+    type T = f64;
+    type Modulator = BpskModulator;
+    type Demodulator = BpskDemodulator;
+    const BITS_PER_SYMBOL: f64 = 1.0;
+}
 
 /// BPSK modulator.
 ///
@@ -20,14 +84,6 @@ impl BpskModulator {
         BpskModulator::default()
     }
 
-    /// Modulates a sequence of bits into symbols.
-    pub fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<f64>
-    where
-        S: Data<Elem = GF2>,
-    {
-        codeword.iter().cloned().map(Self::modulate_bit).collect()
-    }
-
     fn modulate_bit(bit: GF2) -> f64 {
         if bit.is_zero() {
             -1.0
@@ -36,6 +92,17 @@ impl BpskModulator {
         } else {
             panic!("invalid GF2 value")
         }
+    }
+}
+
+impl Modulator for BpskModulator {
+    type T = f64;
+
+    fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<f64>
+    where
+        S: Data<Elem = GF2>,
+    {
+        codeword.iter().cloned().map(Self::modulate_bit).collect()
     }
 }
 
@@ -60,11 +127,29 @@ impl BpskDemodulator {
             scale: -2.0 / (noise_sigma * noise_sigma),
         }
     }
+}
 
-    /// Returns the LLRs corresponding to a sequence of symbols.
-    pub fn demodulate(&self, symbols: &[f64]) -> Vec<f64> {
+impl Demodulator for BpskDemodulator {
+    type T = f64;
+
+    fn from_noise_sigma(noise_sigma: f64) -> BpskDemodulator {
+        BpskDemodulator::new(noise_sigma)
+    }
+
+    fn demodulate(&self, symbols: &[f64]) -> Vec<f64> {
         symbols.iter().map(|&x| self.scale * x).collect()
     }
+}
+
+/// BPSK modulation
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+pub struct Psk8 {}
+
+impl Modulation for Psk8 {
+    type T = Complex<f64>;
+    type Modulator = Psk8Modulator;
+    type Demodulator = Psk8Demodulator;
+    const BITS_PER_SYMBOL: f64 = 3.0;
 }
 
 /// 8PSK modulator.
@@ -80,25 +165,6 @@ impl Psk8Modulator {
         Psk8Modulator::default()
     }
 
-    /// Modulates a sequence of bits into symbols.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the length of the codeword is not a multiple of 3 bits.
-    pub fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<Complex<f64>>
-    where
-        S: Data<Elem = GF2>,
-    {
-        assert_eq!(codeword.len() % 3, 0);
-        codeword
-            .iter()
-            .step_by(3)
-            .zip(codeword.iter().skip(1).step_by(3))
-            .zip(codeword.iter().skip(2).step_by(3))
-            .map(|((&b0, &b1), &b2)| Self::modulate_bits(b0, b1, b2))
-            .collect()
-    }
-
     fn modulate_bits(b0: GF2, b1: GF2, b2: GF2) -> Complex<f64> {
         let a = (0.5f64).sqrt();
         match (b0.is_one(), b1.is_one(), b2.is_one()) {
@@ -111,6 +177,29 @@ impl Psk8Modulator {
             (true, false, true) => Complex::new(a, -a),
             (false, false, true) => Complex::new(1.0, 0.0),
         }
+    }
+}
+
+impl Modulator for Psk8Modulator {
+    type T = Complex<f64>;
+
+    /// Modulates a sequence of bits into symbols.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the length of the codeword is not a multiple of 3 bits.
+    fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<Complex<f64>>
+    where
+        S: Data<Elem = GF2>,
+    {
+        assert_eq!(codeword.len() % 3, 0);
+        codeword
+            .iter()
+            .step_by(3)
+            .zip(codeword.iter().skip(1).step_by(3))
+            .zip(codeword.iter().skip(2).step_by(3))
+            .map(|((&b0, &b1), &b2)| Self::modulate_bits(b0, b1, b2))
+            .collect()
     }
 }
 
@@ -134,14 +223,6 @@ impl Psk8Demodulator {
         Psk8Demodulator {
             scale: 1.0 / (noise_sigma * noise_sigma),
         }
-    }
-
-    /// Returns the LLRs corresponding to a sequence of symbols.
-    pub fn demodulate(&self, symbols: &[Complex<f64>]) -> Vec<f64> {
-        symbols
-            .iter()
-            .flat_map(|&x| self.demodulate_symbol(x))
-            .collect()
     }
 
     fn demodulate_symbol(&self, symbol: Complex<f64>) -> [f64; 3] {
@@ -180,6 +261,21 @@ impl Psk8Demodulator {
                 .reduce(maxstar)
                 .unwrap();
         [b0, b1, b2]
+    }
+}
+
+impl Demodulator for Psk8Demodulator {
+    type T = Complex<f64>;
+
+    fn from_noise_sigma(noise_sigma: f64) -> Psk8Demodulator {
+        Psk8Demodulator::new(noise_sigma)
+    }
+
+    fn demodulate(&self, symbols: &[Complex<f64>]) -> Vec<f64> {
+        symbols
+            .iter()
+            .flat_map(|&x| self.demodulate_symbol(x))
+            .collect()
     }
 }
 

@@ -3,8 +3,9 @@
 //! This module contains utilities for BER simulation.
 
 use super::{
-    channel::AwgnChannel,
-    modulation::{BpskDemodulator, BpskModulator},
+    channel::{AwgnChannel, Channel},
+    factory::Ber,
+    modulation::{Demodulator, Modulation, Modulator},
     puncturing::Puncturer,
 };
 use crate::{
@@ -25,7 +26,7 @@ use std::{
 ///
 /// This struct is used to configure and run a BER test.
 #[derive(Debug)]
-pub struct BerTest {
+pub struct BerTest<Mod: Modulation> {
     decoder_implementation: DecoderImplementation,
     h: SparseMatrix,
     num_workers: usize,
@@ -35,7 +36,7 @@ pub struct BerTest {
     rate: f64,
     encoder: Encoder,
     puncturer: Option<Puncturer>,
-    modulator: BpskModulator,
+    modulator: Mod::Modulator,
     ebn0s_db: Vec<f32>,
     statistics: Vec<Statistics>,
     max_iterations: usize,
@@ -45,15 +46,15 @@ pub struct BerTest {
 }
 
 #[derive(Debug)]
-struct Worker {
+struct Worker<Mod: Modulation> {
     terminate_rx: Receiver<()>,
     results_tx: Sender<WorkerResult>,
     k: usize,
     encoder: Encoder,
     puncturer: Option<Puncturer>,
-    modulator: BpskModulator,
+    modulator: Mod::Modulator,
     channel: AwgnChannel,
-    demodulator: BpskDemodulator,
+    demodulator: Mod::Demodulator,
     decoder: Box<dyn LdpcDecoder>,
     max_iterations: usize,
 }
@@ -163,7 +164,7 @@ macro_rules! report {
     };
 }
 
-impl BerTest {
+impl<Mod: Modulation> BerTest<Mod> {
     /// Creates a new BER test.
     ///
     /// The parameters required to define the test are the parity check matrix
@@ -183,7 +184,7 @@ impl BerTest {
         max_iterations: usize,
         ebn0s_db: &[f32],
         reporter: Option<Reporter>,
-    ) -> Result<BerTest, Error> {
+    ) -> Result<BerTest<Mod>, Error> {
         let k = h.num_cols() - h.num_rows();
         let n_cw = h.num_cols();
         let puncturer = puncturing_pattern.map(Puncturer::new);
@@ -204,7 +205,7 @@ impl BerTest {
             encoder: Encoder::from_h(&h)?,
             h,
             puncturer,
-            modulator: BpskModulator::new(),
+            modulator: Mod::Modulator::default(),
             ebn0s_db: ebn0s_db.to_owned(),
             statistics: Vec::with_capacity(ebn0s_db.len()),
             max_iterations,
@@ -227,35 +228,11 @@ impl BerTest {
         Ok(self.statistics)
     }
 
-    /// Returns the frame size of the code.
-    ///
-    /// This corresponds to the frame size after puncturing.
-    pub fn n(&self) -> usize {
-        self.n
-    }
-
-    /// Returns the codeword size of the code.
-    ///
-    /// This corresponds to the codeword size before puncturing.
-    pub fn n_cw(&self) -> usize {
-        self.n_cw
-    }
-
-    /// Returns the number of information bits of the code.
-    pub fn k(&self) -> usize {
-        self.k
-    }
-
-    /// Returns the rate of the code.
-    pub fn rate(&self) -> f64 {
-        self.rate
-    }
-
     fn do_run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.last_reported = Instant::now();
         for &ebn0_db in &self.ebn0s_db {
             let ebn0 = 10.0_f64.powf(0.1 * f64::from(ebn0_db));
-            let esn0 = self.rate * ebn0;
+            let esn0 = self.rate * Mod::BITS_PER_SYMBOL * ebn0;
             let noise_sigma = (0.5 / esn0).sqrt();
             let (results_tx, results_rx) = mpsc::channel();
             let workers = std::iter::repeat_with(|| {
@@ -314,7 +291,7 @@ impl BerTest {
         &self,
         noise_sigma: f64,
         results_tx: Sender<WorkerResult>,
-    ) -> (Worker, SyncSender<()>) {
+    ) -> (Worker<Mod>, SyncSender<()>) {
         let (terminate_tx, terminate_rx) = mpsc::sync_channel(1);
         (
             Worker {
@@ -325,7 +302,7 @@ impl BerTest {
                 puncturer: self.puncturer.clone(),
                 modulator: self.modulator.clone(),
                 channel: AwgnChannel::new(noise_sigma),
-                demodulator: BpskDemodulator::new(noise_sigma),
+                demodulator: Mod::Demodulator::from_noise_sigma(noise_sigma),
                 decoder: self.decoder_implementation.build_decoder(self.h.clone()),
                 max_iterations: self.max_iterations,
             },
@@ -334,7 +311,29 @@ impl BerTest {
     }
 }
 
-impl Worker {
+impl<Mod: Modulation> Ber for BerTest<Mod> {
+    fn run(self: Box<Self>) -> Result<Vec<Statistics>, Box<dyn std::error::Error>> {
+        BerTest::run(*self)
+    }
+
+    fn n(&self) -> usize {
+        self.n
+    }
+
+    fn n_cw(&self) -> usize {
+        self.n_cw
+    }
+
+    fn k(&self) -> usize {
+        self.k
+    }
+
+    fn rate(&self) -> f64 {
+        self.rate
+    }
+}
+
+impl<Mod: Modulation> Worker<Mod> {
     fn work(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let mut rng = rand::thread_rng();
         loop {

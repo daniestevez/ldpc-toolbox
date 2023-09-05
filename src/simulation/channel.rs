@@ -2,8 +2,32 @@
 //!
 //! This module contains the simulation of an AWGN channel.
 
+use num_complex::Complex;
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
+
+/// Channel type.
+///
+/// Represents a real or complex (IQ) channel.
+///
+/// This trait is implemented for `f64` and `Complex<f64>` as a way of handling
+/// both real and complex channels internally.
+pub trait ChannelType: sealed::Sealed + std::ops::AddAssign + Sized {
+    #[doc(hidden)]
+    fn noise<R: Rng>(awgn_channel: &AwgnChannel, rng: &mut R) -> Self;
+}
+
+/// Channel model.
+///
+/// A channel model is able to add noise to a sequence of symbols, which can be
+/// either real or complex.
+pub trait Channel {
+    /// Adds noise to a sequence of symbols.
+    ///
+    /// The noise is added in-place to the slice `symbols`. An [Rng] is used as
+    /// source of randomness.
+    fn add_noise<R: Rng, T: ChannelType>(&self, rng: &mut R, symbols: &mut [T]);
+}
 
 /// AWGN channel simulation.
 ///
@@ -14,10 +38,13 @@ pub struct AwgnChannel {
 }
 
 impl AwgnChannel {
-    /// Creates a new AWGN channel.
+    /// Creates a new AWGN channel (either real or complex).
     ///
-    /// The channel noise follows a (real) normal distribution with mean zero
-    /// and standard deviation sigma.
+    /// When the channel is real, the channel noise follows a (real) normal
+    /// distribution with mean zero and standard deviation `noise_sigma`. When
+    /// the channel is complex, the channel noise follows a circularly symmetric
+    /// normal distribution with mean zero and standard deviation of its real
+    /// and imaginary part `noise_sigma`.
     ///
     /// # Panics
     ///
@@ -28,16 +55,36 @@ impl AwgnChannel {
             distr: Normal::new(0.0, noise_sigma).unwrap(),
         }
     }
+}
 
-    /// Adds noise to a sequence of symbols.
-    ///
-    /// The noise is added in-place to the slice `symbols`. An [Rng] is used as
-    /// source of randomness.
-    pub fn add_noise<R: Rng>(&self, rng: &mut R, symbols: &mut [f64]) {
+impl Channel for AwgnChannel {
+    fn add_noise<R: Rng, T: ChannelType>(&self, rng: &mut R, symbols: &mut [T]) {
         for x in symbols.iter_mut() {
-            *x += self.distr.sample(rng);
+            *x += T::noise(self, rng);
         }
     }
+}
+
+impl ChannelType for f64 {
+    fn noise<R: Rng>(awgn_channel: &AwgnChannel, rng: &mut R) -> f64 {
+        awgn_channel.distr.sample(rng)
+    }
+}
+
+impl ChannelType for Complex<f64> {
+    fn noise<R: Rng>(awgn_channel: &AwgnChannel, rng: &mut R) -> Complex<f64> {
+        Complex::new(
+            awgn_channel.distr.sample(rng),
+            awgn_channel.distr.sample(rng),
+        )
+    }
+}
+
+mod sealed {
+    use num_complex::Complex;
+    pub trait Sealed {}
+    impl Sealed for f64 {}
+    impl Sealed for Complex<f64> {}
 }
 
 #[cfg(test)]

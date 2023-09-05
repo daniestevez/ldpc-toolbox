@@ -16,7 +16,10 @@
 use crate::{
     cli::*,
     decoder::factory::DecoderImplementation,
-    simulation::ber::{BerTest, Report, Reporter, Statistics},
+    simulation::{
+        ber::{Report, Reporter, Statistics},
+        factory::{Ber, BerTestBuilder, Modulation},
+    },
     sparse::SparseMatrix,
 };
 use clap::Parser;
@@ -41,6 +44,9 @@ pub struct Args {
     /// Decoder implementation
     #[structopt(long, default_value = "Phif64")]
     decoder: DecoderImplementation,
+    /// Modulation
+    #[structopt(long, default_value = "BPSK")]
+    modulation: Modulation,
     /// Puncturing pattern (format "1,1,1,0")
     #[structopt(long)]
     puncturing: Option<String>,
@@ -83,18 +89,20 @@ impl Run for Args {
             tx: report_tx,
             interval: Duration::from_millis(500),
         };
-        let test = BerTest::new(
+        let test = BerTestBuilder {
             h,
-            self.decoder,
-            puncturing_pattern.as_ref().map(|v| &v[..]),
-            self.frame_errors,
-            self.max_iter,
-            &ebn0s,
-            Some(reporter),
-        )?;
-        self.write_details(std::io::stdout(), &test)?;
+            decoder_implementation: self.decoder,
+            modulation: self.modulation,
+            puncturing_pattern: puncturing_pattern.as_ref().map(|v| &v[..]),
+            max_frame_errors: self.frame_errors,
+            max_iterations: self.max_iter,
+            ebn0s_db: &ebn0s,
+            reporter: Some(reporter),
+        }
+        .build()?;
+        self.write_details(std::io::stdout(), &*test)?;
         if let Some(f) = &output_file {
-            self.write_details(f, &test)?;
+            self.write_details(f, &*test)?;
         }
         let mut progress = Progress::new(report_rx, output_file);
         let progress = std::thread::spawn(move || progress.run());
@@ -109,7 +117,7 @@ impl Run for Args {
 }
 
 impl Args {
-    fn write_details<W: Write>(&self, mut f: W, test: &BerTest) -> std::io::Result<()> {
+    fn write_details<W: Write>(&self, mut f: W, test: &dyn Ber) -> std::io::Result<()> {
         writeln!(f, "BER TEST PARAMETERS")?;
         writeln!(f, "-------------------")?;
         writeln!(f, "Simulation:")?;
@@ -117,6 +125,8 @@ impl Args {
         writeln!(f, " - Maximum Eb/N0: {:.2} dB", self.max_ebn0)?;
         writeln!(f, " - Eb/N0 step: {:.2} dB", self.step_ebn0)?;
         writeln!(f, " - Number of frame errors: {}", self.frame_errors)?;
+        writeln!(f, "Channel:")?;
+        writeln!(f, " - Modulation: {}", self.modulation)?;
         writeln!(f, "LDPC code:")?;
         writeln!(f, " - alist: {}", self.alist)?;
         if let Some(puncturing) = self.puncturing.as_ref() {

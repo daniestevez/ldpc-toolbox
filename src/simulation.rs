@@ -4,5 +4,6 @@
 
 pub mod ber;
 pub mod channel;
+pub mod factory;
 pub mod modulation;
 pub mod puncturing;
