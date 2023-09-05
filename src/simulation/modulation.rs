@@ -5,6 +5,7 @@
 
 use crate::gf2::GF2;
 use ndarray::{ArrayBase, Data, Ix1};
+use num_complex::Complex;
 use num_traits::{One, Zero};
 
 /// BPSK modulator.
@@ -66,24 +67,185 @@ impl BpskDemodulator {
     }
 }
 
+/// 8PSK modulator.
+///
+/// 8PSK modulator using the DVB-S2 Gray-coded constellation. The modulator can
+/// only work with codewords whose length is a multiple of 3 bits.
+#[derive(Debug, Clone, Default)]
+pub struct Psk8Modulator {}
+
+impl Psk8Modulator {
+    /// Creates a new 8PSK modulator.
+    pub fn new() -> Psk8Modulator {
+        Psk8Modulator::default()
+    }
+
+    /// Modulates a sequence of bits into symbols.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the length of the codeword is not a multiple of 3 bits.
+    pub fn modulate<S>(&self, codeword: &ArrayBase<S, Ix1>) -> Vec<Complex<f64>>
+    where
+        S: Data<Elem = GF2>,
+    {
+        assert_eq!(codeword.len() % 3, 0);
+        codeword
+            .iter()
+            .step_by(3)
+            .zip(codeword.iter().skip(1).step_by(3))
+            .zip(codeword.iter().skip(2).step_by(3))
+            .map(|((&b0, &b1), &b2)| Self::modulate_bits(b0, b1, b2))
+            .collect()
+    }
+
+    fn modulate_bits(b0: GF2, b1: GF2, b2: GF2) -> Complex<f64> {
+        let a = (0.5f64).sqrt();
+        match (b0.is_one(), b1.is_one(), b2.is_one()) {
+            (false, false, false) => Complex::new(a, a),
+            (true, false, false) => Complex::new(0.0, 1.0),
+            (true, true, false) => Complex::new(-a, a),
+            (false, true, false) => Complex::new(-1.0, 0.0),
+            (false, true, true) => Complex::new(-a, -a),
+            (true, true, true) => Complex::new(0.0, -1.0),
+            (true, false, true) => Complex::new(a, -a),
+            (false, false, true) => Complex::new(1.0, 0.0),
+        }
+    }
+}
+
+/// 8PSK demodulator.
+///
+/// Assumes the same mapping as the [Psk8Modulator]. Demodulates symbols into
+/// LLRs using the exact formula implemented with the max-* function.
+#[derive(Debug, Clone, Default)]
+pub struct Psk8Demodulator {
+    scale: f64,
+}
+
+impl Psk8Demodulator {
+    /// Creates a new 8PSK demodulator.
+    ///
+    /// The `noise_sigma` indicates the channel noise standard deviation. The
+    /// channel noise is assumed to be a circularly symmetric Gaussian with mean
+    /// zero and standard deviation `noise_sigma` in its real part and imaginary
+    /// part (the total variance is `2 * noise_sigma * noise_sigma`.
+    pub fn new(noise_sigma: f64) -> Psk8Demodulator {
+        Psk8Demodulator {
+            scale: 1.0 / (noise_sigma * noise_sigma),
+        }
+    }
+
+    /// Returns the LLRs corresponding to a sequence of symbols.
+    pub fn demodulate(&self, symbols: &[Complex<f64>]) -> Vec<f64> {
+        symbols
+            .iter()
+            .flat_map(|&x| self.demodulate_symbol(x))
+            .collect()
+    }
+
+    fn demodulate_symbol(&self, symbol: Complex<f64>) -> [f64; 3] {
+        let a = (0.5f64).sqrt();
+        let symbol = symbol * self.scale;
+        let d000 = dot(symbol, Complex::new(a, a));
+        let d100 = dot(symbol, Complex::new(0.0, 1.0));
+        let d110 = dot(symbol, Complex::new(-a, a));
+        let d010 = dot(symbol, Complex::new(-1.0, 0.0));
+        let d011 = dot(symbol, Complex::new(-a, -a));
+        let d111 = dot(symbol, Complex::new(0.0, -1.0));
+        let d101 = dot(symbol, Complex::new(a, -a));
+        let d001 = dot(symbol, Complex::new(1.0, 0.0));
+        let b0 = [d000, d001, d010, d011]
+            .into_iter()
+            .reduce(maxstar)
+            .unwrap()
+            - [d100, d101, d110, d111]
+                .into_iter()
+                .reduce(maxstar)
+                .unwrap();
+        let b1 = [d000, d001, d100, d101]
+            .into_iter()
+            .reduce(maxstar)
+            .unwrap()
+            - [d010, d011, d110, d111]
+                .into_iter()
+                .reduce(maxstar)
+                .unwrap();
+        let b2 = [d000, d010, d100, d110]
+            .into_iter()
+            .reduce(maxstar)
+            .unwrap()
+            - [d001, d011, d101, d111]
+                .into_iter()
+                .reduce(maxstar)
+                .unwrap();
+        [b0, b1, b2]
+    }
+}
+
+fn dot(a: Complex<f64>, b: Complex<f64>) -> f64 {
+    a.re * b.re + a.im * b.im
+}
+
+fn maxstar(a: f64, b: f64) -> f64 {
+    a.max(b) + (-((a - b).abs())).exp().ln_1p()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn bpsk() {
+    fn bpsk_modulator() {
         let modulator = BpskModulator::new();
         let x = modulator.modulate(&ndarray::arr1(&[GF2::one(), GF2::zero()]));
         assert_eq!(&x, &[1.0, -1.0]);
     }
 
     #[test]
-    fn demodulator() {
+    fn bpsk_demodulator() {
         let demodulator = BpskDemodulator::new(2.0_f64.sqrt());
         let x = demodulator.demodulate(&[1.0, -1.0]);
         assert_eq!(x.len(), 2);
         let tol = 1e-4;
         assert!((x[0] + 1.0).abs() < tol);
         assert!((x[1] - 1.0).abs() < tol);
+    }
+
+    #[test]
+    fn psk8_modulator() {
+        let o = GF2::one();
+        let z = GF2::zero();
+        let modulator = Psk8Modulator::new();
+        let x = modulator.modulate(&ndarray::arr1(&[o, o, z, z, z, z, o, z, o]));
+        let a = (0.5f64).sqrt();
+        assert_eq!(
+            &x,
+            &[Complex::new(-a, a), Complex::new(a, a), Complex::new(a, -a)]
+        );
+    }
+
+    #[test]
+    fn psk8_demodulator_signs() {
+        let noise_sigma = 1.0;
+        let demodulator = Psk8Demodulator::new(noise_sigma);
+        let a = (0.5f64).sqrt();
+        let llr = demodulator.demodulate(&[
+            Complex::new(1.0, 0.0),
+            Complex::new(a, a),
+            Complex::new(0.0, 1.0),
+        ]);
+        // 001
+        assert!(llr[0] > 0.0);
+        assert!(llr[1] > 0.0);
+        assert!(llr[2] < 0.0);
+        // 000
+        assert!(llr[3] > 0.0);
+        assert!(llr[4] > 0.0);
+        assert!(llr[5] > 0.0);
+        // 100
+        assert!(llr[6] < 0.0);
+        assert!(llr[7] > 0.0);
+        assert!(llr[8] > 0.0);
     }
 }

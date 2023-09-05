@@ -304,6 +304,7 @@ dependencies = [
  "humantime",
  "libc",
  "ndarray",
+ "num-complex",
  "num-traits",
  "num_cpus",
  "rand",
