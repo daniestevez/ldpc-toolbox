@@ -49,6 +49,10 @@ pub struct BerTestBuilder<'a> {
     pub modulation: Modulation,
     /// Codeword puncturing pattern.
     pub puncturing_pattern: Option<&'a [bool]>,
+    /// Codeword interleaving.
+    ///
+    /// A negative value indicates that the columns should be read backwards.
+    pub interleaving_columns: Option<isize>,
     /// Maximum number of frame errors per Eb/N0.
     pub max_frame_errors: u64,
     /// Maximum number of iterations per codeword.
@@ -107,6 +111,7 @@ impl<'a> BerTestBuilder<'a> {
                 self.h,
                 self.decoder_implementation,
                 self.puncturing_pattern,
+                self.interleaving_columns,
                 self.max_frame_errors,
                 self.max_iterations,
                 self.ebn0s_db,
@@ -116,6 +121,7 @@ impl<'a> BerTestBuilder<'a> {
                 self.h,
                 self.decoder_implementation,
                 self.puncturing_pattern,
+                self.interleaving_columns,
                 self.max_frame_errors,
                 self.max_iterations,
                 self.ebn0s_db,

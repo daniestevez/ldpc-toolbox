@@ -50,6 +50,9 @@ pub struct Args {
     /// Puncturing pattern (format "1,1,1,0")
     #[structopt(long)]
     puncturing: Option<String>,
+    /// Interleaving columns (negative for backwards read)
+    #[structopt(long)]
+    interleaving: Option<isize>,
     /// Minimum Eb/N0 (dB)
     #[structopt(long)]
     min_ebn0: f64,
@@ -94,6 +97,7 @@ impl Run for Args {
             decoder_implementation: self.decoder,
             modulation: self.modulation,
             puncturing_pattern: puncturing_pattern.as_ref().map(|v| &v[..]),
+            interleaving_columns: self.interleaving,
             max_frame_errors: self.frame_errors,
             max_iterations: self.max_iter,
             ebn0s_db: &ebn0s,
@@ -131,6 +135,9 @@ impl Args {
         writeln!(f, " - alist: {}", self.alist)?;
         if let Some(puncturing) = self.puncturing.as_ref() {
             writeln!(f, " - Puncturing pattern: {puncturing}")?;
+        }
+        if let Some(interleaving) = self.interleaving.as_ref() {
+            writeln!(f, " - Interleaving columns: {interleaving}")?;
         }
         writeln!(f, " - Information bits (k): {}", test.k())?;
         writeln!(f, " - Codeword size (N_cw): {}", test.n_cw())?;

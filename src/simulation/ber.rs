@@ -5,6 +5,7 @@
 use super::{
     channel::{AwgnChannel, Channel},
     factory::Ber,
+    interleaving::Interleaver,
     modulation::{Demodulator, Modulation, Modulator},
     puncturing::Puncturer,
 };
@@ -36,6 +37,7 @@ pub struct BerTest<Mod: Modulation> {
     rate: f64,
     encoder: Encoder,
     puncturer: Option<Puncturer>,
+    interleaver: Option<Interleaver>,
     modulator: Mod::Modulator,
     ebn0s_db: Vec<f32>,
     statistics: Vec<Statistics>,
@@ -52,6 +54,7 @@ struct Worker<Mod: Modulation> {
     k: usize,
     encoder: Encoder,
     puncturer: Option<Puncturer>,
+    interleaver: Option<Interleaver>,
     modulator: Mod::Modulator,
     channel: AwgnChannel,
     demodulator: Mod::Demodulator,
@@ -169,17 +172,19 @@ impl<Mod: Modulation> BerTest<Mod> {
     ///
     /// The parameters required to define the test are the parity check matrix
     /// `h`, an optional puncturing pattern (which uses the semantics of
-    /// [`Puncturer`]), the maximum number of frame errors at which to stop the
-    /// simulation for each Eb/N0, the maximum number of iterations of the LDPC
-    /// decoder, a list of Eb/N0's in dB units, and an optional [`Reporter`] to
-    /// send messages about the test progress.
+    /// [`Puncturer`]), an optional interleaving pattern, the maximum number of
+    /// frame errors at which to stop the simulation for each Eb/N0, the maximum
+    /// number of iterations of the LDPC decoder, a list of Eb/N0's in dB units,
+    /// and an optional [`Reporter`] to send messages about the test progress.
     ///
     /// This function only defines the BER test. To run it it is necessary to
     /// call the [`BerTest::run`] method.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         h: SparseMatrix,
         decoder_implementation: DecoderImplementation,
         puncturing_pattern: Option<&[bool]>,
+        interleaving_columns: Option<isize>,
         max_frame_errors: u64,
         max_iterations: usize,
         ebn0s_db: &[f32],
@@ -188,6 +193,7 @@ impl<Mod: Modulation> BerTest<Mod> {
         let k = h.num_cols() - h.num_rows();
         let n_cw = h.num_cols();
         let puncturer = puncturing_pattern.map(Puncturer::new);
+        let interleaver = interleaving_columns.map(|n| Interleaver::new(n.unsigned_abs(), n < 0));
         let puncturer_rate = if let Some(p) = puncturer.as_ref() {
             p.rate()
         } else {
@@ -205,6 +211,7 @@ impl<Mod: Modulation> BerTest<Mod> {
             encoder: Encoder::from_h(&h)?,
             h,
             puncturer,
+            interleaver,
             modulator: Mod::Modulator::default(),
             ebn0s_db: ebn0s_db.to_owned(),
             statistics: Vec::with_capacity(ebn0s_db.len()),
@@ -300,6 +307,7 @@ impl<Mod: Modulation> BerTest<Mod> {
                 k: self.k,
                 encoder: self.encoder.clone(),
                 puncturer: self.puncturer.clone(),
+                interleaver: self.interleaver.clone(),
                 modulator: self.modulator.clone(),
                 channel: AwgnChannel::new(noise_sigma),
                 demodulator: Mod::Demodulator::from_noise_sigma(noise_sigma),
@@ -362,12 +370,20 @@ impl<Mod: Modulation> Worker<Mod> {
             Some(p) => p.puncture(&codeword)?,
             None => codeword,
         };
+        let transmitted = match self.interleaver.as_ref() {
+            Some(i) => i.interleave(&transmitted),
+            None => transmitted,
+        };
         let mut symbols = self.modulator.modulate(&transmitted);
         self.channel.add_noise(rng, &mut symbols);
         let llrs_demod = self.demodulator.demodulate(&symbols);
-        let llrs_decoder = match self.puncturer.as_ref() {
-            Some(p) => p.depuncture(&llrs_demod)?,
+        let llrs_decoder = match self.interleaver.as_ref() {
+            Some(i) => i.deinterleave(&llrs_demod),
             None => llrs_demod,
+        };
+        let llrs_decoder = match self.puncturer.as_ref() {
+            Some(p) => p.depuncture(&llrs_decoder)?,
+            None => llrs_decoder,
         };
 
         let (decoded, iterations, success) =
