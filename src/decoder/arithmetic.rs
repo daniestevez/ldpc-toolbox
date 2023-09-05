@@ -625,6 +625,7 @@ macro_rules! impl_8bitquant {
 
 macro_rules! impl_send_var_messages_i8 {
     ($degree_one_clip:expr, $jones_clip:expr) => {
+        #[allow(clippy::redundant_closure_call)]
         fn send_var_messages<F>(
             &mut self,
             input_llr: i8,
@@ -717,6 +718,7 @@ macro_rules! impl_minstarapproxi8 {
                 Self::clip(var_llr)
             }
 
+            #[allow(clippy::redundant_closure_call)]
             fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
             where
                 F: FnMut(SentMessage<i8>),
@@ -757,6 +759,7 @@ macro_rules! impl_minstarapproxi8 {
 
             impl_send_var_messages_i8!($degree_one_clip, $jones_clip);
 
+            #[allow(clippy::redundant_closure_call)]
             fn update_check_messages_and_vars(
                 &mut self,
                 check_messages: &mut [SentMessage<i8>],
@@ -1123,6 +1126,7 @@ macro_rules! impl_aminstari8 {
                 Self::clip(var_llr)
             }
 
+            #[allow(clippy::redundant_closure_call)]
             fn send_check_messages<F>(&mut self, var_messages: &[Message<i8>], mut send: F)
             where
                 F: FnMut(SentMessage<i8>),
@@ -1191,6 +1195,7 @@ macro_rules! impl_aminstari8 {
 
             impl_send_var_messages_i8!($degree_one_clip, $jones_clip);
 
+            #[allow(clippy::redundant_closure_call)]
             fn update_check_messages_and_vars(
                 &mut self,
                 check_messages: &mut [SentMessage<i8>],
