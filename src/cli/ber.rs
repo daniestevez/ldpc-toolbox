@@ -197,7 +197,7 @@ impl Progress {
                 if let Some(f) = &mut self.output_file {
                     writeln!(f, "{}", &Self::format_progress(&last_stats.unwrap()))?;
                 }
-                return Ok(())
+                return Ok(());
             };
             if let Some(s) = &last_stats {
                 if s.ebn0_db != stats.ebn0_db {

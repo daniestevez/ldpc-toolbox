@@ -11,11 +11,12 @@ pub fn gauss_reduction<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) -> Re
     // Reduce to upper triangular with ones on diagonal
     for j in 0..n {
         // Find non-zero element in current column
-        let Some(k) = array.slice(s![j.., j]).iter().enumerate().find_map(|(t, x)| if x.is_zero() {
-            None
-        } else {
-            Some(j + t)
-        }) else {
+        let Some(k) = array
+            .slice(s![j.., j])
+            .iter()
+            .enumerate()
+            .find_map(|(t, x)| if x.is_zero() { None } else { Some(j + t) })
+        else {
             return Err(Error::NotInvertible);
         };
 
