@@ -15,7 +15,7 @@
 
 use crate::{
     cli::*,
-    decoder::factory::DecoderImplementation,
+    decoder::factory::{DecoderFactory, DecoderImplementation},
     simulation::{
         ber::{Report, Reporter, Statistics},
         factory::{Ber, BerTestBuilder, Modulation},
@@ -28,6 +28,7 @@ use std::{
     error::Error,
     fs::File,
     io::Write,
+    str::FromStr,
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
@@ -35,7 +36,10 @@ use std::{
 /// BER test CLI arguments.
 #[derive(Debug, Parser)]
 #[command(about = "Performs a BER simulation")]
-pub struct Args {
+pub struct Args<
+    Dec: DecoderFactory + FromStr<Err = E> = DecoderImplementation,
+    E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>> = &'static str,
+> {
     /// alist file for the code
     alist: String,
     /// Output file for simulation results
@@ -43,7 +47,7 @@ pub struct Args {
     output_file: Option<String>,
     /// Decoder implementation
     #[structopt(long, default_value = "Phif64")]
-    decoder: DecoderImplementation,
+    decoder: Dec,
     /// Modulation
     #[structopt(long, default_value = "BPSK")]
     modulation: Modulation,
@@ -70,7 +74,11 @@ pub struct Args {
     frame_errors: u64,
 }
 
-impl Run for Args {
+impl<
+        Dec: DecoderFactory + FromStr<Err = E>,
+        E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
+    > Run for Args<Dec, E>
+{
     fn run(&self) -> Result<(), Box<dyn Error>> {
         let puncturing_pattern = if let Some(p) = self.puncturing.as_ref() {
             Some(parse_puncturing_pattern(p)?)
@@ -94,7 +102,7 @@ impl Run for Args {
         };
         let test = BerTestBuilder {
             h,
-            decoder_implementation: self.decoder,
+            decoder_implementation: self.decoder.clone(),
             modulation: self.modulation,
             puncturing_pattern: puncturing_pattern.as_ref().map(|v| &v[..]),
             interleaving_columns: self.interleaving,
@@ -120,7 +128,11 @@ impl Run for Args {
     }
 }
 
-impl Args {
+impl<
+        Dec: DecoderFactory + FromStr<Err = E>,
+        E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
+    > Args<Dec, E>
+{
     fn write_details<W: Write>(&self, mut f: W, test: &dyn Ber) -> std::io::Result<()> {
         writeln!(f, "BER TEST PARAMETERS")?;
         writeln!(f, "-------------------")?;

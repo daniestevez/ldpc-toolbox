@@ -10,7 +10,10 @@ use super::{
     puncturing::Puncturer,
 };
 use crate::{
-    decoder::{factory::DecoderImplementation, LdpcDecoder},
+    decoder::{
+        factory::{DecoderFactory, DecoderImplementation},
+        LdpcDecoder,
+    },
     encoder::{Encoder, Error},
     gf2::GF2,
     sparse::SparseMatrix,
@@ -27,8 +30,8 @@ use std::{
 ///
 /// This struct is used to configure and run a BER test.
 #[derive(Debug)]
-pub struct BerTest<Mod: Modulation> {
-    decoder_implementation: DecoderImplementation,
+pub struct BerTest<Mod: Modulation, Dec = DecoderImplementation> {
+    decoder_implementation: Dec,
     h: SparseMatrix,
     num_workers: usize,
     k: usize,
@@ -167,7 +170,7 @@ macro_rules! report {
     };
 }
 
-impl<Mod: Modulation> BerTest<Mod> {
+impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
     /// Creates a new BER test.
     ///
     /// The parameters required to define the test are the parity check matrix
@@ -182,14 +185,14 @@ impl<Mod: Modulation> BerTest<Mod> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         h: SparseMatrix,
-        decoder_implementation: DecoderImplementation,
+        decoder_implementation: Dec,
         puncturing_pattern: Option<&[bool]>,
         interleaving_columns: Option<isize>,
         max_frame_errors: u64,
         max_iterations: usize,
         ebn0s_db: &[f32],
         reporter: Option<Reporter>,
-    ) -> Result<BerTest<Mod>, Error> {
+    ) -> Result<BerTest<Mod, Dec>, Error> {
         let k = h.num_cols() - h.num_rows();
         let n_cw = h.num_cols();
         let puncturer = puncturing_pattern.map(Puncturer::new);
@@ -319,7 +322,7 @@ impl<Mod: Modulation> BerTest<Mod> {
     }
 }
 
-impl<Mod: Modulation> Ber for BerTest<Mod> {
+impl<Mod: Modulation, Dec: DecoderFactory> Ber for BerTest<Mod, Dec> {
     fn run(self: Box<Self>) -> Result<Vec<Statistics>, Box<dyn std::error::Error>> {
         BerTest::run(*self)
     }

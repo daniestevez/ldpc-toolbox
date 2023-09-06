@@ -1,7 +1,10 @@
 use super::{c_to_string, size_t_to_usize};
 use crate::{
     cli::ber::parse_puncturing_pattern,
-    decoder::{factory::DecoderImplementation, LdpcDecoder},
+    decoder::{
+        factory::{DecoderFactory, DecoderImplementation},
+        LdpcDecoder,
+    },
     simulation::puncturing::Puncturer,
     sparse::SparseMatrix,
 };

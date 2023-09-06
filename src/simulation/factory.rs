@@ -7,7 +7,10 @@ use super::{
     ber::{BerTest, Reporter, Statistics},
     modulation::{Bpsk, Psk8},
 };
-use crate::{decoder::factory::DecoderImplementation, sparse::SparseMatrix};
+use crate::{
+    decoder::factory::{DecoderFactory, DecoderImplementation},
+    sparse::SparseMatrix,
+};
 
 /// BER test.
 ///
@@ -40,11 +43,11 @@ pub trait Ber {
 ///
 /// This struct contains all the parameters needed to create a BER test.
 #[derive(Debug)]
-pub struct BerTestBuilder<'a> {
+pub struct BerTestBuilder<'a, Dec = DecoderImplementation> {
     /// LDPC parity check matrix.
     pub h: SparseMatrix,
     /// LDPC decoder implementation.
-    pub decoder_implementation: DecoderImplementation,
+    pub decoder_implementation: Dec,
     /// Modulation.
     pub modulation: Modulation,
     /// Codeword puncturing pattern.
@@ -100,14 +103,14 @@ impl std::fmt::Display for Modulation {
     }
 }
 
-impl<'a> BerTestBuilder<'a> {
+impl<'a, Dec: DecoderFactory> BerTestBuilder<'a, Dec> {
     /// Create a BER test.
     ///
     /// This function only defines the BER test. To run it it is necessary to
     /// call the [`Ber::run`] method.
     pub fn build(self) -> Result<Box<dyn Ber>, Box<dyn std::error::Error>> {
         Ok(match self.modulation {
-            Modulation::Bpsk => Box::new(BerTest::<Bpsk>::new(
+            Modulation::Bpsk => Box::new(BerTest::<Bpsk, Dec>::new(
                 self.h,
                 self.decoder_implementation,
                 self.puncturing_pattern,
@@ -117,7 +120,7 @@ impl<'a> BerTestBuilder<'a> {
                 self.ebn0s_db,
                 self.reporter,
             )?),
-            Modulation::Psk8 => Box::new(BerTest::<Psk8>::new(
+            Modulation::Psk8 => Box::new(BerTest::<Psk8, Dec>::new(
                 self.h,
                 self.decoder_implementation,
                 self.puncturing_pattern,

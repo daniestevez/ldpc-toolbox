@@ -19,8 +19,8 @@ jobs:
     - name: Format
       run: cargo fmt --all -- --check
     - name: Clippy
-      run: cargo clippy --verbose -- -D warnings
+      run: cargo clippy --all-targets --verbose -- -D warnings
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --all-targets --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --all-targets --verbose

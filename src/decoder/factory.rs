@@ -6,6 +6,22 @@
 
 use super::{arithmetic::*, flooding, horizontal_layered, LdpcDecoder};
 use crate::sparse::SparseMatrix;
+use std::fmt::Display;
+
+/// Decoder factory.
+///
+/// This trait is implemented by [`DecoderImplementation`], which builds a
+/// suitable decoder depending on the value of an enum. Other factories can be
+/// implemented by the user in order to run a BER test with an LDPC decoder
+/// implemented externally to ldpc-toolbox (such decoder must be wrapped as a
+/// `Box <dyn LdpcDecoder>`).
+pub trait DecoderFactory: Display + Clone + Sync + Send + 'static {
+    /// Builds and LDPC decoder.
+    ///
+    /// Given a parity check matrix, this function builds an LDPC decoder
+    /// corresponding to this decoder implementation.
+    fn build_decoder(&self, h: SparseMatrix) -> Box<dyn LdpcDecoder>;
+}
 
 /// LDPC decoder implementation.
 ///
@@ -180,12 +196,8 @@ macro_rules! new_decoder {
 
 macro_rules! impl_decoderimplementation {
     ($($var:path, $arith:ty, $decoder:tt, $text:expr);+;) => {
-        impl DecoderImplementation {
-            /// Builds and LDPC decoder.
-            ///
-            /// Given a parity check matrix, this function builds an LDPC decoder
-            /// corresponding to this decoder implementation.
-            pub fn build_decoder(&self, h: SparseMatrix) -> Box<dyn LdpcDecoder> {
+        impl DecoderFactory for DecoderImplementation {
+            fn build_decoder(&self, h: SparseMatrix) -> Box<dyn LdpcDecoder> {
                 match self {
                     $(
                         $var => Box::new(new_decoder!($decoder, $arith, h)),
@@ -207,7 +219,7 @@ macro_rules! impl_decoderimplementation {
             }
         }
 
-        impl std::fmt::Display for DecoderImplementation {
+        impl Display for DecoderImplementation {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
                 write!(
                     f,
