@@ -176,7 +176,7 @@ mod test {
         let mut decoder = test_decoder();
         let codeword_good = [0, 0, 1, 0, 1, 1];
         for j in 0..codeword_good.len() {
-            let mut codeword_bad = codeword_good.clone();
+            let mut codeword_bad = codeword_good;
             codeword_bad[j] ^= 1;
             let max_iter = 100;
             let DecoderOutput {
