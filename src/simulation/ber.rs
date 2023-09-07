@@ -44,6 +44,7 @@ pub struct BerTest<Mod: Modulation, Dec = DecoderImplementation> {
     modulator: Mod::Modulator,
     ebn0s_db: Vec<f32>,
     statistics: Vec<Statistics>,
+    bch_max_errors: u64,
     max_iterations: usize,
     max_frame_errors: u64,
     reporter: Option<Reporter>,
@@ -78,12 +79,18 @@ type WorkerResult = Result<WorkerResultOk, ()>;
 #[derive(Debug, Clone, PartialEq)]
 struct CurrentStatistics {
     num_frames: u64,
-    bit_errors: u64,
-    frame_errors: u64,
     false_decodes: u64,
     total_iterations: u64,
-    correct_iterations: u64,
     start: Instant,
+    ldpc: CurrentCodeStatistics,
+    bch: Option<CurrentCodeStatistics>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CurrentCodeStatistics {
+    bit_errors: u64,
+    frame_errors: u64,
+    correct_iterations: u64,
 }
 
 /// BER test statistics.
@@ -96,31 +103,45 @@ pub struct Statistics {
     pub ebn0_db: f32,
     /// Number of frames tested.
     pub num_frames: u64,
-    /// Number of bit errors.
-    pub bit_errors: u64,
-    /// Number of frame errors.
-    pub frame_errors: u64,
     /// Total number of iterations.
     pub total_iterations: u64,
-    /// Sum of iterations in correct frames.
-    pub correct_iterations: u64,
     /// Number of frames falsely decoded.
     ///
-    /// This are frames for which the decoder converged to a valid codeword, but
-    /// the codeword is different to the transmitted codeword.
+    /// These are frames for which the decoder has converged to a valid
+    /// codeword, but the codeword is different from the transmitted codeword.
     pub false_decodes: u64,
-    /// Bit error rate.
-    pub ber: f64,
-    /// Frame error rate.
-    pub fer: f64,
     /// Average iterations per frame.
     pub average_iterations: f64,
-    /// Average iterations per correct frame.
-    pub average_iterations_correct: f64,
     /// Elapsed time for this test case.
     pub elapsed: Duration,
     /// Throughput in Mbps (referred to information bits).
     pub throughput_mbps: f64,
+    /// Statistics of the inner LDPC decoder.
+    pub ldpc: CodeStatistics,
+    /// Statistics of the combined inner LDPC decoder plus outer BCH decoder (if it exists).
+    pub bch: Option<CodeStatistics>,
+}
+
+/// BER test statistics for a particular code.
+///
+/// This is a substructure of [`Statistics`] that includes all the elements that
+/// depend on whether we are using only the inner LDPC decoder or LDPC plus
+/// BCH. `Statistics` has two instances of this structure: one for LDPC-only and
+/// another for LDPC plus BCH (which is only present when BCH is enabled).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CodeStatistics {
+    /// Number of bit errors.
+    pub bit_errors: u64,
+    /// Number of frame errors.
+    pub frame_errors: u64,
+    /// Sum of iterations in correct frames.
+    pub correct_iterations: u64,
+    /// Bit error rate.
+    pub ber: f64,
+    /// Frame error rate.
+    pub fer: f64,
+    /// Average iterations per correct frame.
+    pub average_iterations_correct: f64,
 }
 
 /// Progress reporter.
@@ -192,6 +213,7 @@ impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
         max_iterations: usize,
         ebn0s_db: &[f32],
         reporter: Option<Reporter>,
+        bch_max_errors: u64,
     ) -> Result<BerTest<Mod, Dec>, Error> {
         let k = h.num_cols() - h.num_rows();
         let n_cw = h.num_cols();
@@ -218,6 +240,7 @@ impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
             modulator: Mod::Modulator::default(),
             ebn0s_db: ebn0s_db.to_owned(),
             statistics: Vec::with_capacity(ebn0s_db.len()),
+            bch_max_errors,
             max_iterations,
             max_frame_errors,
             reporter,
@@ -253,18 +276,28 @@ impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
             .take(self.num_workers)
             .collect::<Vec<_>>();
 
-            let mut current_statistics = CurrentStatistics::new();
-            while current_statistics.frame_errors < self.max_frame_errors {
+            let mut current_statistics = CurrentStatistics::new(self.bch_max_errors > 0);
+            while current_statistics.errors_for_termination() < self.max_frame_errors {
                 match results_rx.recv().unwrap() {
                     Ok(result) => {
-                        current_statistics.bit_errors += result.bit_errors;
-                        current_statistics.frame_errors += u64::from(result.frame_error);
+                        current_statistics.ldpc.bit_errors += result.bit_errors;
+                        current_statistics.ldpc.frame_errors += u64::from(result.frame_error);
                         current_statistics.false_decodes += u64::from(result.false_decode);
                         current_statistics.total_iterations += result.iterations;
                         if !result.frame_error {
-                            current_statistics.correct_iterations += result.iterations;
+                            current_statistics.ldpc.correct_iterations += result.iterations;
                         }
                         current_statistics.num_frames += 1;
+                        if let Some(bch) = &mut current_statistics.bch {
+                            if result.bit_errors > self.bch_max_errors {
+                                // BCH cannot decode codeword
+                                bch.bit_errors += result.bit_errors;
+                                bch.frame_errors += 1;
+                            } else {
+                                // BCH can decode codeword
+                                bch.correct_iterations += result.iterations;
+                            }
+                        }
                     }
                     Err(()) => break,
                 }
@@ -426,22 +459,57 @@ impl<Mod: Modulation> Worker<Mod> {
 }
 
 impl CurrentStatistics {
-    fn new() -> CurrentStatistics {
+    fn new(has_bch: bool) -> CurrentStatistics {
         CurrentStatistics {
             num_frames: 0,
-            bit_errors: 0,
-            frame_errors: 0,
             false_decodes: 0,
             total_iterations: 0,
-            correct_iterations: 0,
             start: Instant::now(),
+            ldpc: CurrentCodeStatistics::new(),
+            bch: if has_bch {
+                Some(CurrentCodeStatistics::new())
+            } else {
+                None
+            },
+        }
+    }
+
+    fn errors_for_termination(&self) -> u64 {
+        if let Some(bch) = &self.bch {
+            bch.frame_errors
+        } else {
+            self.ldpc.frame_errors
         }
     }
 }
 
-impl Default for CurrentStatistics {
-    fn default() -> CurrentStatistics {
-        CurrentStatistics::new()
+impl CurrentCodeStatistics {
+    fn new() -> CurrentCodeStatistics {
+        CurrentCodeStatistics {
+            bit_errors: 0,
+            frame_errors: 0,
+            correct_iterations: 0,
+        }
+    }
+}
+
+impl Default for CurrentCodeStatistics {
+    fn default() -> CurrentCodeStatistics {
+        CurrentCodeStatistics::new()
+    }
+}
+
+impl CodeStatistics {
+    fn from_current(stats: &CurrentCodeStatistics, num_frames: u64, k: usize) -> CodeStatistics {
+        CodeStatistics {
+            bit_errors: stats.bit_errors,
+            frame_errors: stats.frame_errors,
+            correct_iterations: stats.correct_iterations,
+            ber: stats.bit_errors as f64 / (k as f64 * num_frames as f64),
+            fer: stats.frame_errors as f64 / num_frames as f64,
+            average_iterations_correct: stats.correct_iterations as f64
+                / (num_frames - stats.frame_errors) as f64,
+        }
     }
 }
 
@@ -451,18 +519,16 @@ impl Statistics {
         Statistics {
             ebn0_db,
             num_frames: stats.num_frames,
-            bit_errors: stats.bit_errors,
-            frame_errors: stats.frame_errors,
             false_decodes: stats.false_decodes,
             total_iterations: stats.total_iterations,
-            correct_iterations: stats.correct_iterations,
-            ber: stats.bit_errors as f64 / (k as f64 * stats.num_frames as f64),
-            fer: stats.frame_errors as f64 / stats.num_frames as f64,
             average_iterations: stats.total_iterations as f64 / stats.num_frames as f64,
-            average_iterations_correct: stats.correct_iterations as f64
-                / (stats.num_frames - stats.frame_errors) as f64,
             elapsed,
             throughput_mbps: 1e-6 * (k as f64 * stats.num_frames as f64) / elapsed.as_secs_f64(),
+            ldpc: CodeStatistics::from_current(&stats.ldpc, stats.num_frames, k),
+            bch: stats
+                .bch
+                .as_ref()
+                .map(|b| CodeStatistics::from_current(b, stats.num_frames, k)),
         }
     }
 }

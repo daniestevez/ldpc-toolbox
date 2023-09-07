@@ -65,6 +65,10 @@ pub struct BerTestBuilder<'a, Dec = DecoderImplementation> {
     /// An optional reporter object to which the BER test will send periodic
     /// updates about its progress.
     pub reporter: Option<Reporter>,
+    /// Maximum number of bit errors that the BCH decoder can correct.
+    ///
+    /// A value of zero means that there is no BCH decoder.
+    pub bch_max_errors: u64,
 }
 
 /// Modulation.
@@ -119,6 +123,7 @@ impl<'a, Dec: DecoderFactory> BerTestBuilder<'a, Dec> {
                 self.max_iterations,
                 self.ebn0s_db,
                 self.reporter,
+                self.bch_max_errors,
             )?),
             Modulation::Psk8 => Box::new(BerTest::<Psk8, Dec>::new(
                 self.h,
@@ -129,6 +134,7 @@ impl<'a, Dec: DecoderFactory> BerTestBuilder<'a, Dec> {
                 self.max_iterations,
                 self.ebn0s_db,
                 self.reporter,
+                self.bch_max_errors,
             )?),
         })
     }

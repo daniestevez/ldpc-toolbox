@@ -45,6 +45,9 @@ pub struct Args<
     /// Output file for simulation results
     #[structopt(long)]
     output_file: Option<String>,
+    /// Output file for LDPC-only results (only useful when using BCH)
+    #[structopt(long)]
+    output_file_ldpc: Option<String>,
     /// Decoder implementation
     #[structopt(long, default_value = "Phif64")]
     decoder: Dec,
@@ -72,6 +75,9 @@ pub struct Args<
     /// Number of frame errors to collect
     #[structopt(long, default_value = "100")]
     frame_errors: u64,
+    /// Maximum number of bit errors that the BCH decoder can correct (0 means no BCH decoder)
+    #[structopt(long, default_value = "0")]
+    bch_max_errors: u64,
 }
 
 impl<
@@ -86,10 +92,14 @@ impl<
             None
         };
         let h = SparseMatrix::from_alist(&std::fs::read_to_string(&self.alist)?)?;
-        let output_file = if let Some(f) = &self.output_file {
+        let mut output_file = if let Some(f) = &self.output_file {
             Some(File::create(f)?)
         } else {
             None
+        };
+        let mut output_file_ldpc = match (self.bch_max_errors > 0, &self.output_file_ldpc) {
+            (true, Some(f)) => Some(File::create(f)?),
+            _ => None,
         };
         let num_ebn0s = ((self.max_ebn0 - self.min_ebn0) / self.step_ebn0).floor() as usize + 1;
         let ebn0s = (0..num_ebn0s)
@@ -110,13 +120,25 @@ impl<
             max_iterations: self.max_iter,
             ebn0s_db: &ebn0s,
             reporter: Some(reporter),
+            bch_max_errors: self.bch_max_errors,
         }
         .build()?;
         self.write_details(std::io::stdout(), &*test)?;
-        if let Some(f) = &output_file {
-            self.write_details(f, &*test)?;
+        if let Some(f) = &mut output_file {
+            self.write_details(&*f, &*test)?;
+            if self.bch_max_errors > 0 {
+                writeln!(f)?;
+                writeln!(f, "LDPC+BCH results")?;
+                writeln!(f)?;
+            }
         }
-        let mut progress = Progress::new(report_rx, output_file);
+        if let Some(f) = &mut output_file_ldpc {
+            self.write_details(&*f, &*test)?;
+            writeln!(f)?;
+            writeln!(f, "LDPC-only results")?;
+            writeln!(f)?;
+        }
+        let mut progress = Progress::new(report_rx, output_file, output_file_ldpc);
         let progress = std::thread::spawn(move || progress.run());
         test.run()?;
         // This block cannot actually be written with the ? operator
@@ -158,6 +180,14 @@ impl<
         writeln!(f, "LDPC decoder:")?;
         writeln!(f, " - Implementation: {}", self.decoder)?;
         writeln!(f, " - Maximum iterations: {}", self.max_iter)?;
+        if self.bch_max_errors > 0 {
+            writeln!(f, "BCH decoder:")?;
+            writeln!(
+                f,
+                " - Maximum bit errors correctable: {}",
+                self.bch_max_errors
+            )?;
+        }
         writeln!(f)?;
         Ok(())
     }
@@ -185,14 +215,20 @@ struct Progress {
     rx: Receiver<Report>,
     term: Term,
     output_file: Option<File>,
+    output_file_ldpc: Option<File>,
 }
 
 impl Progress {
-    fn new(rx: Receiver<Report>, output_file: Option<File>) -> Progress {
+    fn new(
+        rx: Receiver<Report>,
+        output_file: Option<File>,
+        output_file_ldpc: Option<File>,
+    ) -> Progress {
         Progress {
             rx,
             term: Term::stdout(),
             output_file,
+            output_file_ldpc,
         }
     }
 
@@ -219,19 +255,29 @@ impl Progress {
         if let Some(f) = &mut self.output_file {
             writeln!(f, "{}", Self::format_header())?;
         }
+        if let Some(f) = &mut self.output_file_ldpc {
+            writeln!(f, "{}", Self::format_header())?;
+        }
         let mut last_stats = None;
         loop {
             let Report::Statistics(stats) = self.rx.recv().unwrap() else {
                 // BER test has finished
+                let last_stats = last_stats.unwrap();
                 if let Some(f) = &mut self.output_file {
-                    writeln!(f, "{}", &Self::format_progress(&last_stats.unwrap()))?;
+                    writeln!(f, "{}", &Self::format_progress(&last_stats, false))?;
+                }
+                if let Some(f) = &mut self.output_file_ldpc {
+                    writeln!(f, "{}", &Self::format_progress(&last_stats, true))?;
                 }
                 return Ok(());
             };
             if let Some(s) = &last_stats {
                 if s.ebn0_db != stats.ebn0_db {
                     if let Some(f) = &mut self.output_file {
-                        writeln!(f, "{}", &Self::format_progress(s))?;
+                        writeln!(f, "{}", &Self::format_progress(s, false))?;
+                    }
+                    if let Some(f) = &mut self.output_file_ldpc {
+                        writeln!(f, "{}", &Self::format_progress(s, true))?;
                     }
                 }
             }
@@ -242,7 +288,8 @@ impl Progress {
                 }
                 _ => (),
             };
-            self.term.write_line(&Self::format_progress(&stats))?;
+            self.term
+                .write_line(&Self::format_progress(&stats, false))?;
             last_stats = Some(stats);
         }
     }
@@ -252,18 +299,23 @@ impl Progress {
          --------|----------|----------|----------|----------|---------|---------|----------|----------|----------|----------"
     }
 
-    fn format_progress(stats: &Statistics) -> String {
+    fn format_progress(stats: &Statistics, force_ldpc: bool) -> String {
+        let code_stats = match (force_ldpc, &stats.bch) {
+            (true, _) => &stats.ldpc,
+            (false, Some(bch)) => bch,
+            (false, None) => &stats.ldpc,
+        };
         format!(
             "{:7.2} | {:8} | {:8} | {:8} | {:8} | {:7.2e} | {:7.2e} | {:8.1} | {:8.1} | {:8.3} | {}",
             stats.ebn0_db,
             stats.num_frames,
-            stats.bit_errors,
-            stats.frame_errors,
+            code_stats.bit_errors,
+            code_stats.frame_errors,
             stats.false_decodes,
-            stats.ber,
-            stats.fer,
+            code_stats.ber,
+            code_stats.fer,
             stats.average_iterations,
-            stats.average_iterations_correct,
+            code_stats.average_iterations_correct,
             stats.throughput_mbps,
             humantime::format_duration(Duration::from_secs(stats.elapsed.as_secs()))
         )
