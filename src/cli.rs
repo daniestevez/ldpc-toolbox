@@ -10,6 +10,7 @@ use std::error::Error;
 
 pub mod ber;
 pub mod ccsds;
+pub mod ccsds_c2;
 pub mod dvbs2;
 pub mod encode;
 pub mod mackay_neal;
@@ -29,7 +30,10 @@ pub enum Args {
     BER(ber::Args),
     /// ccsds subcommand
     CCSDS(ccsds::Args),
-    /// encode subcommand,
+    /// ccsds-c2 subcommand
+    #[allow(non_camel_case_types)]
+    CCSDS_C2(ccsds_c2::Args),
+    /// encode subcommand
     Encode(encode::Args),
     /// dvbs2 subcommand
     DVBS2(dvbs2::Args),
@@ -44,6 +48,7 @@ impl Run for Args {
         match self {
             Args::BER(x) => x.run(),
             Args::CCSDS(x) => x.run(),
+            Args::CCSDS_C2(x) => x.run(),
             Args::DVBS2(x) => x.run(),
             Args::Encode(x) => x.run(),
             Args::MackayNeal(x) => x.run(),

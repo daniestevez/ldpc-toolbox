@@ -1,10 +1,10 @@
-//! # CCSDS TM Synchronization and Channel Coding LDPC codes
+//! CCSDS TM Synchronization and Channel Coding LDPC codes.
 //!
-//! This module contains the AR4JA LDPC codes described in the TM
-//! Synchronization and Channel Coding Blue Book.
+//! This module contains the AR4JA LDPC codes and the C2 code described in the
+//! TM Synchronization and Channel Coding Blue Book.
 //!
 //! ## References
-//! \[1\] [CCSDS 131.0-B-4 TM Synchronization and Channel Coding Blue Book](https://public.ccsds.org/Pubs/131x0b4.pdf).
+//! \[1\] [CCSDS 131.0-B-5 TM Synchronization and Channel Coding Blue Book](https://public.ccsds.org/Pubs/131x0b5.pdf).
 
 use crate::sparse::SparseMatrix;
 use enum_iterator::Sequence;
@@ -332,6 +332,82 @@ static PHI_K: [[[usize; 7]; 26]; 4] = [
         [13, 8, 38, 12, 211, 179, 1300],
         [2, 7, 18, 41, 510, 430, 1033],
         [18, 24, 62, 249, 320, 264, 1606],
+    ],
+];
+
+/// C2 code definition.
+///
+/// This C2 code is the basic (8176, 7156) LDPC code. Expurgation, shortening
+/// and extension used to construct the (8160, 7136) code should be handled
+/// separately.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Default)]
+pub struct C2Code {}
+
+impl C2Code {
+    /// Creates a C2 code definition.
+    pub fn new() -> C2Code {
+        C2Code::default()
+    }
+
+    /// Constructs the parity check matrix for the code.
+    pub fn h(&self) -> SparseMatrix {
+        const N: usize = 511;
+        let mut h = SparseMatrix::new(Self::ROW_BLOCKS * N, Self::COL_BLOCKS * N);
+        for (row, circs) in C2_CIRCULANTS.iter().enumerate() {
+            for (col, circs) in circs.iter().enumerate() {
+                for &circ in circs.iter() {
+                    let circ = usize::from(circ);
+                    for j in 0..N {
+                        h.insert(row * N + j, col * N + (j + circ) % N);
+                    }
+                }
+            }
+        }
+        h
+    }
+
+    const ROW_BLOCKS: usize = 2;
+    const COL_BLOCKS: usize = 16;
+    const BLOCK_WEIGHT: usize = 2;
+}
+
+// Table 7-1 in CCSDS 131.0-B-5
+static C2_CIRCULANTS: [[[u16; C2Code::BLOCK_WEIGHT]; C2Code::COL_BLOCKS]; C2Code::ROW_BLOCKS] = [
+    [
+        [0, 176],
+        [12, 239],
+        [0, 352],
+        [24, 431],
+        [0, 392],
+        [151, 409],
+        [0, 351],
+        [9, 359],
+        [0, 307],
+        [53, 329],
+        [0, 207],
+        [18, 281],
+        [0, 399],
+        [202, 457],
+        [0, 247],
+        [36, 261],
+    ],
+    [
+        [99, 471],
+        [130, 473],
+        [198, 435],
+        [260, 478],
+        [215, 420],
+        [282, 481],
+        [48, 396],
+        [193, 445],
+        [273, 430],
+        [302, 451],
+        [96, 379],
+        [191, 386],
+        [244, 467],
+        [364, 470],
+        [51, 382],
+        [192, 414],
     ],
 ];
 

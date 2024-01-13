@@ -1,7 +1,7 @@
 //! CCSDS CLI subcommand
 //!
-//! This subcommand can be used to generate the LDPC codes described in the
-//! CCSDS TM Synchronization and Channel Coding Blue Book.  standard. It will
+//! This subcommand can be used to generate the AR4JA LDPC codes described in
+//! the CCSDS TM Synchronization and Channel Coding Blue Book standard. It will
 //! print the alist of the parity check matrix to `stdout` and optionally
 //! compute and print the girth of the Tanner graph. See [`crate::codes::ccsds`]
 //! for more information about the CCSDS LDPC codes.
