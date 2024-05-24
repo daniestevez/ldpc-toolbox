@@ -7,6 +7,7 @@ pub enum Error {
 
 pub fn gauss_reduction<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) -> Result<(), Error> {
     let (n, m) = array.dim();
+    assert!(n <= m);
 
     // Reduce to upper triangular with ones on diagonal
     for j in 0..n {
@@ -67,9 +68,9 @@ pub fn gauss_reduction<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) -> Re
 pub fn row_echelon_form<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) {
     let (n, m) = array.dim();
 
-    // Reduce to upper triangular with ones on diagonal
+    let mut j = 0;
     let mut k = 0;
-    for j in 0..n {
+    while j < m && k < n {
         // Find non-zero element in current column, at or below row k
         let Some(s) = array
             .slice(s![k.., j])
@@ -79,6 +80,7 @@ pub fn row_echelon_form<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) {
         else {
             // All the elements at or below row k are zero. Done with this
             // column.
+            j += 1;
             continue;
         };
 
@@ -102,6 +104,7 @@ pub fn row_echelon_form<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) {
             }
         }
 
+        j += 1;
         k += 1;
     }
 }

@@ -39,6 +39,12 @@ pub fn parity_to_systematic(h: &SparseMatrix) -> Result<SparseMatrix, Error> {
         a[[j, k]] = GF2::one();
     }
     linalg::row_echelon_form(&mut a);
+    // Check that the matrix has full rank by checking that there is a non-zero
+    // element in the last row (we start looking by the end, since chances are
+    // higher to find a non-zero element there).
+    if !(0..m).rev().any(|j| a[[n - 1, j]] != GF2::zero()) {
+        return Err(Error::NotFullRank);
+    }
     // write point for columns that do not "go down" in the row echelon form
     let mut k = 0;
     let mut h_new = SparseMatrix::new(n, m);
@@ -65,10 +71,7 @@ pub fn parity_to_systematic(h: &SparseMatrix) -> Result<SparseMatrix, Error> {
                 break;
             }
         }
-        if !found {
-            // No column "going down" found. The matrix doesn't have full rank.
-            return Err(Error::NotFullRank);
-        }
+        assert!(found);
     }
     // Insert remaining columns at the write point
     for j in j0..m {
