@@ -23,12 +23,11 @@
 //! right) to obtain the n-k parity check bits. In this case, the encoding
 //! complexity is O(n^2).
 
-use crate::{gf2::GF2, sparse::SparseMatrix};
+use crate::{gf2::GF2, linalg, sparse::SparseMatrix};
 use ndarray::{s, Array1, Array2, ArrayBase, Data, Ix1};
 use num_traits::One;
 use thiserror::Error;
 
-mod gauss;
 mod staircase;
 
 /// LDPC encoder error.
@@ -85,9 +84,9 @@ impl Encoder {
                 a[[j, t]] = GF2::one();
             }
 
-            match gauss::gauss_reduction(&mut a) {
+            match linalg::gauss_reduction(&mut a) {
                 Ok(()) => (),
-                Err(gauss::Error::NotInvertible) => return Err(Error::SubmatrixNotInvertible),
+                Err(linalg::Error::NotInvertible) => return Err(Error::SubmatrixNotInvertible),
             };
 
             let gen_matrix = a.slice(s![.., n..]).to_owned();

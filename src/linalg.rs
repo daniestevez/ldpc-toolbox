@@ -64,6 +64,48 @@ pub fn gauss_reduction<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) -> Re
     Ok(())
 }
 
+pub fn row_echelon_form<A: LinalgScalar + PartialEq>(array: &mut Array2<A>) {
+    let (n, m) = array.dim();
+
+    // Reduce to upper triangular with ones on diagonal
+    let mut k = 0;
+    for j in 0..n {
+        // Find non-zero element in current column, at or below row k
+        let Some(s) = array
+            .slice(s![k.., j])
+            .iter()
+            .enumerate()
+            .find_map(|(t, x)| if x.is_zero() { None } else { Some(k + t) })
+        else {
+            // All the elements at or below row k are zero. Done with this
+            // column.
+            continue;
+        };
+
+        if s != k {
+            // Swap rows s and k
+            for t in j..m {
+                array.swap([s, t], [k, t]);
+            }
+        }
+
+        let x = array[[k, j]];
+
+        // Subtract to rows below to make zeros below row k
+        for t in (k + 1)..n {
+            let y = array[[t, j]];
+            if !y.is_zero() {
+                // avoid calculations if we're subtracting zero
+                for u in j..m {
+                    array[[t, u]] = array[[t, u]] - y * array[[k, u]] / x;
+                }
+            }
+        }
+
+        k += 1;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -85,6 +127,24 @@ mod test {
             [i, o, o, i, o, o, o, i, o],
             [o, i, o, i, i, i, o, o, o],
             [o, o, i, o, i, o, i, i, i],
+        ]);
+        assert_eq!(&a, &expected);
+    }
+
+    #[test]
+    fn row_echelon() {
+        let i = GF2::one();
+        let o = GF2::zero();
+        let mut a = arr2(&[
+            [i, i, o, o, i, o, i, o, i],
+            [i, o, o, i, i, i, o, i, o],
+            [i, i, o, o, o, i, i, o, i],
+        ]);
+        row_echelon_form(&mut a);
+        let expected = arr2(&[
+            [i, i, o, o, i, o, i, o, i],
+            [o, i, o, i, o, i, i, i, i],
+            [o, o, o, o, i, i, o, o, o],
         ]);
         assert_eq!(&a, &expected);
     }

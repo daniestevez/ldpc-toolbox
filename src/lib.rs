@@ -21,5 +21,7 @@ pub mod peg;
 pub mod rand;
 pub mod simulation;
 pub mod sparse;
+pub mod systematic;
 
+mod linalg;
 mod util;

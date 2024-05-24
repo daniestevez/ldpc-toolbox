@@ -15,6 +15,7 @@ pub mod dvbs2;
 pub mod encode;
 pub mod mackay_neal;
 pub mod peg;
+pub mod systematic;
 
 /// Trait to run a CLI subcommand
 pub trait Run {
@@ -41,6 +42,8 @@ pub enum Args {
     MackayNeal(mackay_neal::Args),
     /// peg subcommand
     PEG(peg::Args),
+    /// systematic subcommand
+    Systematic(systematic::Args),
 }
 
 impl Run for Args {
@@ -53,6 +56,7 @@ impl Run for Args {
             Args::Encode(x) => x.run(),
             Args::MackayNeal(x) => x.run(),
             Args::PEG(x) => x.run(),
+            Args::Systematic(x) => x.run(),
         }
     }
 }
