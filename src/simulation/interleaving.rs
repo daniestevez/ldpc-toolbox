@@ -37,7 +37,7 @@ impl Interleaver {
     /// # Panics
     ///
     /// Panics if the codeword size is not divisible by the number of columns.
-    pub fn interleave<S: Data, T: Clone + Zero>(&self, codeword: &ArrayBase<S, Ix1>) -> Array1<T>
+    pub fn interleave<S, T: Clone + Zero>(&self, codeword: &ArrayBase<S, Ix1>) -> Array1<T>
     where
         S: Data<Elem = T>,
     {
