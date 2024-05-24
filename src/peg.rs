@@ -8,7 +8,7 @@
 //! The algorithm works by adding edge by edge to the Tanner graph. For each
 //! symbol node, `wc` check nodes are selected to be joined by edges. Each one
 //! is selected in a different step, and the edge is added to the graph, which
-//! affects subsequent decissions.
+//! affects subsequent decisions.
 //!
 //! To select an edge for the current symbol node, a breadth-first search is
 //! done with that node as the root, in order to find the distance from each of

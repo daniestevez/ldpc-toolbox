@@ -6,7 +6,7 @@
 //!
 //! The algorithm works by adding column by column to the parity check
 //! matrix. At each step, `wc` rows from the subset of rows that have not yet
-//! achieved the total row weight `wr` are random chosen, and ones are inserted
+//! achieved the total row weight `wr` are randomly chosen, and ones are inserted
 //! in those positions.
 //!
 //! Optionally, to enforce a minimum girth, at each step the candidate
