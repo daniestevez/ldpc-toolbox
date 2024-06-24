@@ -8,8 +8,10 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 
-void *ldpc_toolbox_decoder_ctor(const char *alist, const char *implementation,
+void *ldpc_toolbox_decoder_ctor(const char *alist_file_path, const char *implementation,
                                 const char *puncturing);
+void *ldpc_toolbox_decoder_ctor_alist_string(const char *alist, const char *implementation,
+                                             const char *puncturing);  
 void ldpc_toolbox_decoder_dtor(void *decoder);
 int32_t ldpc_toolbox_decoder_decode_f64(void *decoder,
                                         uint8_t *output, size_t output_len,
@@ -20,7 +22,8 @@ int32_t ldpc_toolbox_decoder_decode_f32(void *decoder,
                                         const float *llrs, size_t llrs_len,
                                         uint32_t max_iterations);
 
-void *ldpc_toolbox_encoder_ctor(const char *alist, const char *puncturing);
+void *ldpc_toolbox_encoder_ctor(const char *alist_file_path, const char *puncturing);
+void *ldpc_toolbox_encoder_ctor_alist_string(const char *alist, const char *puncturing);
 void ldpc_toolbox_encoder_dtor(void *encoder);
 void ldpc_toolbox_encoder_encode(void *encoder,
                                  uint8_t *output, size_t output_len,

@@ -23,7 +23,7 @@ struct Decoder {
 
 impl Decoder {
     fn new(alist: &str, implementation: &str, puncturing: &str) -> Result<Decoder, Box<dyn Error>> {
-        let h = SparseMatrix::from_alist(&std::fs::read_to_string(alist)?)?;
+        let h = SparseMatrix::from_alist(alist)?;
         let implementation: DecoderImplementation = implementation.parse()?;
         let puncturing_pattern = if !puncturing.is_empty() {
             Some(parse_puncturing_pattern(puncturing)?)
@@ -33,6 +33,18 @@ impl Decoder {
         let puncturer = puncturing_pattern.map(|v| Puncturer::new(&v));
         let decoder = implementation.build_decoder(h);
         Ok(Decoder { decoder, puncturer })
+    }
+
+    fn from_alist_file(
+        alist_file: &str,
+        implementation: &str,
+        puncturing: &str,
+    ) -> Result<Decoder, Box<dyn Error>> {
+        Decoder::new(
+            &std::fs::read_to_string(alist_file)?,
+            implementation,
+            puncturing,
+        )
     }
 
     fn decode_f64(&mut self, output: &mut [u8], llrs: &[f64], max_iterations: u32) -> i32 {
@@ -62,6 +74,22 @@ impl Decoder {
 
 #[no_mangle]
 unsafe extern "C" fn ldpc_toolbox_decoder_ctor(
+    alist_file_path: *const c_char,
+    implementation: *const c_char,
+    puncturing: *const c_char,
+) -> *mut c_void {
+    let alist_file_path = c_to_string(alist_file_path);
+    let implementation = c_to_string(implementation);
+    let puncturing = c_to_string(puncturing);
+    if let Ok(decoder) = Decoder::from_alist_file(&alist_file_path, &implementation, &puncturing) {
+        Box::into_raw(Box::new(decoder)) as *mut c_void
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+#[no_mangle]
+unsafe extern "C" fn ldpc_toolbox_decoder_ctor_alist_string(
     alist: *const c_char,
     implementation: *const c_char,
     puncturing: *const c_char,

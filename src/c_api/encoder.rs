@@ -19,7 +19,7 @@ struct Encoder {
 
 impl Encoder {
     fn new(alist: &str, puncturing: &str) -> Result<Encoder, Box<dyn Error>> {
-        let h = SparseMatrix::from_alist(&std::fs::read_to_string(alist)?)?;
+        let h = SparseMatrix::from_alist(alist)?;
         let puncturing_pattern = if !puncturing.is_empty() {
             Some(parse_puncturing_pattern(puncturing)?)
         } else {
@@ -28,6 +28,10 @@ impl Encoder {
         let puncturer = puncturing_pattern.map(|v| Puncturer::new(&v));
         let encoder = LdpcEncoder::from_h(&h)?;
         Ok(Encoder { encoder, puncturer })
+    }
+
+    fn from_alist_file(alist_file: &str, puncturing: &str) -> Result<Encoder, Box<dyn Error>> {
+        Encoder::new(&std::fs::read_to_string(alist_file)?, puncturing)
     }
 
     fn encode(&self, output: &mut [u8], input: &[u8]) {
@@ -54,6 +58,20 @@ impl Encoder {
 
 #[no_mangle]
 unsafe extern "C" fn ldpc_toolbox_encoder_ctor(
+    alist_file_path: *const c_char,
+    puncturing: *const c_char,
+) -> *mut c_void {
+    let alist_file_path = c_to_string(alist_file_path);
+    let puncturing = c_to_string(puncturing);
+    if let Ok(encoder) = Encoder::from_alist_file(&alist_file_path, &puncturing) {
+        Box::into_raw(Box::new(encoder)) as *mut c_void
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+#[no_mangle]
+unsafe extern "C" fn ldpc_toolbox_encoder_ctor_alist_string(
     alist: *const c_char,
     puncturing: *const c_char,
 ) -> *mut c_void {
