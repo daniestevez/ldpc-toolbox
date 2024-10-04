@@ -44,7 +44,7 @@ impl Interleaver {
         assert_eq!(codeword.len() % self.columns, 0);
         let a2 = codeword
             .view()
-            .into_shape((self.columns, codeword.len() / self.columns))
+            .into_shape_with_order((self.columns, codeword.len() / self.columns))
             .unwrap();
         let mut transpose = a2.t();
         if self.read_rows_backwards {
@@ -52,7 +52,10 @@ impl Interleaver {
         }
         let mut a = Array2::zeros(transpose.raw_dim());
         a.assign(&transpose);
-        a.view().into_shape(codeword.len()).unwrap().to_owned()
+        a.view()
+            .into_shape_with_order(codeword.len())
+            .unwrap()
+            .to_owned()
     }
 
     /// Deinterleaves a codeword.
@@ -65,7 +68,7 @@ impl Interleaver {
         let codeword = Array1::from_iter(codeword.iter().cloned());
         let a2 = codeword
             .view()
-            .into_shape((codeword.len() / self.columns, self.columns))
+            .into_shape_with_order((codeword.len() / self.columns, self.columns))
             .unwrap();
         let mut transpose = a2.t();
         if self.read_rows_backwards {
@@ -74,7 +77,7 @@ impl Interleaver {
         let mut a = Array2::zeros(transpose.raw_dim());
         a.assign(&transpose);
         a.view()
-            .into_shape(codeword.len())
+            .into_shape_with_order(codeword.len())
             .unwrap()
             .iter()
             .cloned()
