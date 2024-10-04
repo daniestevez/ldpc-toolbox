@@ -226,30 +226,50 @@ impl SparseMatrix {
         self.cols[col].iter()
     }
 
-    /// Writes the matrix in alist format to a writer
-    ///
-    /// # Errors
-    /// If a call to `write!()` returns an error, this function returns
-    /// such an error.
-    pub fn write_alist<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+    fn write_alist_maybe_padding<W: std::fmt::Write>(
+        &self,
+        w: &mut W,
+        use_padding: bool,
+    ) -> std::fmt::Result {
         writeln!(w, "{} {}", self.num_cols(), self.num_rows())?;
         let directions = [&self.cols, &self.rows];
-        for dir in directions.iter() {
-            write!(w, "{} ", dir.iter().map(|el| el.len()).max().unwrap_or(0))?;
+        let mut direction_lengths = [0, 0];
+        for (dir, len) in directions.iter().zip(direction_lengths.iter_mut()) {
+            *len = dir.iter().map(|el| el.len()).max().unwrap_or(0);
         }
-        writeln!(w)?;
+        writeln!(w, "{} {}", direction_lengths[0], direction_lengths[1])?;
         for dir in directions.iter() {
-            for el in *dir {
-                write!(w, "{} ", el.len())?;
+            let mut lengths = dir.iter().map(|el| el.len());
+            if let Some(len) = lengths.next() {
+                write!(w, "{}", len)?;
+            }
+            for len in lengths {
+                write!(w, " {}", len)?;
             }
             writeln!(w)?;
         }
-        for dir in directions.iter() {
+        for (dir, &dirlen) in directions.iter().zip(direction_lengths.iter()) {
             for el in *dir {
                 let mut v = el.clone();
                 v.sort_unstable();
-                for x in &v {
-                    write!(w, "{} ", x + 1)?;
+                let vlen = v.len();
+                let mut v = v.iter().map(|x| x + 1);
+                if let Some(x) = v.next() {
+                    write!(w, "{}", x)?;
+                }
+                for x in v {
+                    write!(w, " {}", x)?;
+                }
+                if use_padding {
+                    if vlen == 0 {
+                        write!(w, "0")?;
+                    }
+                    // .max(1) because we've added one padding element if vlen
+                    // was zero
+                    let num_padding = dirlen - vlen.max(1);
+                    for _ in 0..num_padding {
+                        write!(w, " 0")?;
+                    }
                 }
                 writeln!(w)?;
             }
@@ -257,14 +277,53 @@ impl SparseMatrix {
         Ok(())
     }
 
-    /// Returns a [`String`] with the alist representation of the matrix
+    /// Writes the matrix in alist format to a writer.
+    ///
+    /// This function includes zeros as padding for irregular codes, as
+    /// originally defined by MacKay.
+    ///
+    /// # Errors
+    /// If a call to `write!()` returns an error, this function returns
+    /// such an error.
+    pub fn write_alist<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+        self.write_alist_maybe_padding(w, true)
+    }
+
+    /// Writes the matrix in alist format to a writer.
+    ///
+    /// This function does not include zeros as padding for irregular codes.
+    ///
+    /// # Errors
+    /// If a call to `write!()` returns an error, this function returns
+    /// such an error.
+    pub fn write_alist_no_padding<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+        self.write_alist_maybe_padding(w, false)
+    }
+
+    /// Returns a [`String`] with the alist representation of the matrix.
+    ///
+    /// This function includes zeros as padding for irregular codes, as
+    /// originally defined by MacKay.
     pub fn alist(&self) -> String {
         let mut s = String::new();
         self.write_alist(&mut s).unwrap();
         s
     }
 
-    /// Constructs and returns a sparse matrix from its alist representation
+    /// Returns a [`String`] with the alist representation of the matrix.
+    ///
+    /// This function does not include zeros as padding for irregular codes.
+    pub fn alist_no_padding(&self) -> String {
+        let mut s = String::new();
+        self.write_alist_no_padding(&mut s).unwrap();
+        s
+    }
+
+    /// Constructs and returns a sparse matrix from its alist representation.
+    ///
+    /// This function is able to read alists that use zeros for padding in the
+    /// case of an irregular code (as was defined originally by MacKay), as well
+    /// as alists that omit these zeros.
     ///
     /// # Errors
     /// `alist` should hold a valid alist representation. If an error is found
@@ -298,7 +357,10 @@ impl SparseMatrix {
                 let row: usize = row
                     .parse()
                     .map_err(|_| String::from("row value is not a number"))?;
-                h.insert(row - 1, col);
+                // row == 0 is used for padding in irregular codes
+                if row != 0 {
+                    h.insert(row - 1, col);
+                }
             }
         }
         // we do not need to process the rows of the alist
@@ -471,29 +533,95 @@ mod tests {
             h.insert(j, j + 8);
         }
         let expected = "12 4
-1 3 
-1 1 1 1 1 1 1 1 1 1 1 1 
-3 3 3 3 
-1 
-2 
-3 
-4 
-1 
-2 
-3 
-4 
-1 
-2 
-3 
-4 
-1 5 9 
-2 6 10 
-3 7 11 
-4 8 12 
+1 3
+1 1 1 1 1 1 1 1 1 1 1 1
+3 3 3 3
+1
+2
+3
+4
+1
+2
+3
+4
+1
+2
+3
+4
+1 5 9
+2 6 10
+3 7 11
+4 8 12
 ";
         assert_eq!(h.alist(), expected);
 
         let h2 = SparseMatrix::from_alist(expected).unwrap();
         assert_eq!(h2.alist(), expected);
+    }
+
+    #[test]
+    fn test_alist_irregular() {
+        let mut h = SparseMatrix::new(4, 12);
+        for j in 0..4 {
+            h.insert(j, j);
+            h.insert(j, j + 4);
+            if j < 2 {
+                h.insert(j, j + 8);
+            }
+        }
+
+        // with zero padding
+
+        let expected = "12 4
+1 3
+1 1 1 1 1 1 1 1 1 1 0 0
+3 3 2 2
+1
+2
+3
+4
+1
+2
+3
+4
+1
+2
+0
+0
+1 5 9
+2 6 10
+3 7 0
+4 8 0
+";
+        let expected_no_padding = "12 4
+1 3
+1 1 1 1 1 1 1 1 1 1 0 0
+3 3 2 2
+1
+2
+3
+4
+1
+2
+3
+4
+1
+2
+
+
+1 5 9
+2 6 10
+3 7
+4 8
+";
+
+        assert_eq!(h.alist(), expected);
+        assert_eq!(h.alist_no_padding(), expected_no_padding);
+        let h2 = SparseMatrix::from_alist(expected).unwrap();
+        assert_eq!(h2.alist(), expected);
+        assert_eq!(h2.alist_no_padding(), expected_no_padding);
+        let h3 = SparseMatrix::from_alist(expected_no_padding).unwrap();
+        assert_eq!(h3.alist(), expected);
+        assert_eq!(h3.alist_no_padding(), expected_no_padding);
     }
 }
