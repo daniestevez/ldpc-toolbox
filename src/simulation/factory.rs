@@ -107,7 +107,7 @@ impl std::fmt::Display for Modulation {
     }
 }
 
-impl<'a, Dec: DecoderFactory> BerTestBuilder<'a, Dec> {
+impl<Dec: DecoderFactory> BerTestBuilder<'_, Dec> {
     /// Create a BER test.
     ///
     /// This function only defines the BER test. To run it it is necessary to

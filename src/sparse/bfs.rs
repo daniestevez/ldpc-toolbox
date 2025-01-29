@@ -56,7 +56,7 @@ pub struct BFSContext<'a> {
     h: &'a SparseMatrix,
 }
 
-impl<'a> BFSContext<'a> {
+impl BFSContext<'_> {
     pub fn new(h: &SparseMatrix, node: Node) -> BFSContext {
         let mut to_visit = VecDeque::new();
         to_visit.push_back(PathHead {
