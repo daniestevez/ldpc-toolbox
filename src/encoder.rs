@@ -24,7 +24,7 @@
 //! complexity is O(n^2).
 
 use crate::{gf2::GF2, linalg, sparse::SparseMatrix};
-use ndarray::{s, Array1, Array2, ArrayBase, Data, Ix1};
+use ndarray::{Array1, Array2, ArrayBase, Data, Ix1, s};
 use num_traits::One;
 use thiserror::Error;
 
@@ -51,7 +51,7 @@ enum EncoderType {
     DenseGenerator { gen_matrix: Array2<GF2> },
     // Encoder for a staircase type (repeat-accumulate) code. The encoder sparse
     // matrix computes the parity data before accumulation.
-    Staircase { gen: SparseMatrix },
+    Staircase { gen_matrix: SparseMatrix },
 }
 
 impl Encoder {
@@ -65,13 +65,13 @@ impl Encoder {
 
             // If H = [H0 H1] with H0 n x (m-n) and H1 n x n, extract H0 to a
             // SparseMatrix
-            let mut gen = SparseMatrix::new(n, m - n);
+            let mut gen_matrix = SparseMatrix::new(n, m - n);
             for (j, k) in h.iter_all() {
                 if k < m - n {
-                    gen.insert(j, k);
+                    gen_matrix.insert(j, k);
                 }
             }
-            EncoderType::Staircase { gen }
+            EncoderType::Staircase { gen_matrix }
         } else {
             // General case, in which the generator matrix is obtained by
             // Gaussian reduction (it will be a dense matrix in general).
@@ -102,10 +102,11 @@ impl Encoder {
     {
         let parity = match &self.encoder {
             EncoderType::DenseGenerator { gen_matrix } => gen_matrix.dot(message),
-            EncoderType::Staircase { gen } => {
+            EncoderType::Staircase { gen_matrix } => {
                 // initial parity (needs to be accumulated)
                 let mut parity = Array1::from_iter(
-                    (0..gen.num_rows()).map(|j| gen.iter_row(j).map(|&k| message[k]).sum()),
+                    (0..gen_matrix.num_rows())
+                        .map(|j| gen_matrix.iter_row(j).map(|&k| message[k]).sum()),
                 );
                 // Accumulate parity
                 for j in 1..parity.len() {

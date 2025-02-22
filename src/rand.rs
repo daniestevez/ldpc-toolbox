@@ -11,8 +11,8 @@
 //! let mut rng = Rng::seed_from_u64(seed);
 //! assert_eq!(rng.next_u64(), 12578764544318200737);
 //! ```
-pub use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha8Rng;
+pub use rand_chacha::rand_core::SeedableRng;
 pub use rand_core::RngCore;
 
 /// The RNG used in throughout this crate for algorithms using pseudorandom

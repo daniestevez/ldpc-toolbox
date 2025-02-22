@@ -2,8 +2,8 @@ use super::{c_to_string, size_t_to_usize};
 use crate::{
     cli::ber::parse_puncturing_pattern,
     decoder::{
-        factory::{DecoderFactory, DecoderImplementation},
         LdpcDecoder,
+        factory::{DecoderFactory, DecoderImplementation},
     },
     simulation::puncturing::Puncturer,
     sparse::SparseMatrix,
@@ -72,44 +72,41 @@ impl Decoder {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_decoder_ctor(
     alist_file_path: *const c_char,
     implementation: *const c_char,
     puncturing: *const c_char,
 ) -> *mut c_void {
-    let alist_file_path = c_to_string(alist_file_path);
-    let implementation = c_to_string(implementation);
-    let puncturing = c_to_string(puncturing);
-    if let Ok(decoder) = Decoder::from_alist_file(&alist_file_path, &implementation, &puncturing) {
-        Box::into_raw(Box::new(decoder)) as *mut c_void
-    } else {
-        std::ptr::null_mut()
-    }
+    let alist_file_path = unsafe { c_to_string(alist_file_path) };
+    let implementation = unsafe { c_to_string(implementation) };
+    let puncturing = unsafe { c_to_string(puncturing) };
+    Decoder::from_alist_file(&alist_file_path, &implementation, &puncturing)
+        .map_or(std::ptr::null_mut(), |decoder| {
+            Box::into_raw(Box::new(decoder)) as *mut c_void
+        })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_decoder_ctor_alist_string(
     alist: *const c_char,
     implementation: *const c_char,
     puncturing: *const c_char,
 ) -> *mut c_void {
-    let alist = c_to_string(alist);
-    let implementation = c_to_string(implementation);
-    let puncturing = c_to_string(puncturing);
-    if let Ok(decoder) = Decoder::new(&alist, &implementation, &puncturing) {
+    let alist = unsafe { c_to_string(alist) };
+    let implementation = unsafe { c_to_string(implementation) };
+    let puncturing = unsafe { c_to_string(puncturing) };
+    Decoder::new(&alist, &implementation, &puncturing).map_or(std::ptr::null_mut(), |decoder| {
         Box::into_raw(Box::new(decoder)) as *mut c_void
-    } else {
-        std::ptr::null_mut()
-    }
+    })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_decoder_dtor(decoder: *mut c_void) {
-    drop(Box::from_raw(decoder as *mut Decoder));
+    drop(unsafe { Box::from_raw(decoder as *mut Decoder) });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_decoder_decode_f64(
     decoder: *mut c_void,
     output: *mut u8,
@@ -118,13 +115,13 @@ unsafe extern "C" fn ldpc_toolbox_decoder_decode_f64(
     llrs_len: size_t,
     max_iterations: u32,
 ) -> i32 {
-    let output = std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len));
-    let llrs = std::slice::from_raw_parts(llrs, size_t_to_usize(llrs_len));
-    let decoder = &mut *(decoder as *mut Decoder);
+    let output = unsafe { std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len)) };
+    let llrs = unsafe { std::slice::from_raw_parts(llrs, size_t_to_usize(llrs_len)) };
+    let decoder = unsafe { &mut *(decoder as *mut Decoder) };
     decoder.decode_f64(output, llrs, max_iterations)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_decoder_decode_f32(
     decoder: *mut c_void,
     output: *mut u8,
@@ -133,8 +130,8 @@ unsafe extern "C" fn ldpc_toolbox_decoder_decode_f32(
     llrs_len: size_t,
     max_iterations: u32,
 ) -> i32 {
-    let output = std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len));
-    let llrs = std::slice::from_raw_parts(llrs, size_t_to_usize(llrs_len));
-    let decoder = &mut *(decoder as *mut Decoder);
+    let output = unsafe { std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len)) };
+    let llrs = unsafe { std::slice::from_raw_parts(llrs, size_t_to_usize(llrs_len)) };
+    let decoder = unsafe { &mut *(decoder as *mut Decoder) };
     decoder.decode_f32(output, llrs, max_iterations)
 }

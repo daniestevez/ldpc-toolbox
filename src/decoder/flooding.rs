@@ -4,7 +4,7 @@
 //! flooding message passing schedule.
 
 use super::{
-    arithmetic::DecoderArithmetic, check_llrs, hard_decisions, DecoderOutput, LdpcDecoder, Messages,
+    DecoderOutput, LdpcDecoder, Messages, arithmetic::DecoderArithmetic, check_llrs, hard_decisions,
 };
 use crate::sparse::SparseMatrix;
 

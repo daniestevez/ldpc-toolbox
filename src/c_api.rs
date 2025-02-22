@@ -1,14 +1,14 @@
 use libc::size_t;
 use std::{
     convert::TryFrom,
-    ffi::{c_char, CStr},
+    ffi::{CStr, c_char},
 };
 
 mod decoder;
 mod encoder;
 
 unsafe fn c_to_string(s: *const c_char) -> String {
-    String::from_utf8_lossy(CStr::from_ptr(s).to_bytes()).to_string()
+    String::from_utf8_lossy(unsafe { CStr::from_ptr(s) }.to_bytes()).to_string()
 }
 
 #[allow(clippy::useless_conversion)]

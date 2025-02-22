@@ -4,8 +4,8 @@ pub fn is_staircase(h: &SparseMatrix) -> bool {
     let n = h.num_rows();
     let m = h.num_cols();
     let mut num_checked = 0; // number of ones in parity part
-                             // Check that all the ones in the parity part of the matrix are staircase
-                             // positions
+    // Check that all the ones in the parity part of the matrix are staircase
+    // positions
     for (j, k) in h.iter_all() {
         if k >= m - n {
             if j == 0 && k != m - n {

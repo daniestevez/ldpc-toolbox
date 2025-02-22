@@ -591,11 +591,7 @@ macro_rules! impl_8bitquant {
                         let x = (Self::QUANTIZER_C
                             * (-(t as f64 / Self::QUANTIZER_C)).exp().ln_1p())
                         .round() as i8;
-                        if x > 0 {
-                            Some(x)
-                        } else {
-                            None
-                        }
+                        if x > 0 { Some(x) } else { None }
                     })
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
@@ -986,13 +982,11 @@ macro_rules! impl_aminstarf {
                 let vmin = msgmin.value.abs();
                 let delta = delta.min(vmin) - (-(delta - vmin).abs()).exp().ln_1p()
                     + (-(delta + vmin)).exp().ln_1p();
-                for msg in var_messages.iter().enumerate().filter_map(|(j, msg)| {
-                    if j != argmin {
-                        Some(msg)
-                    } else {
-                        None
-                    }
-                }) {
+                for msg in var_messages
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(j, msg)| if j != argmin { Some(msg) } else { None })
+                {
                     send(SentMessage {
                         dest: msg.source,
                         value: if (sign != 0) ^ (msg.value < 0.0) {
@@ -1175,13 +1169,11 @@ macro_rules! impl_aminstari8 {
                     + Self::lookup(&self.table, delta.saturating_add(vmin)))
                 .max(0);
                 let delta_hl = $check_hardlimit(delta);
-                for msg in var_messages.iter().enumerate().filter_map(|(j, msg)| {
-                    if j != argmin {
-                        Some(msg)
-                    } else {
-                        None
-                    }
-                }) {
+                for msg in var_messages
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(j, msg)| if j != argmin { Some(msg) } else { None })
+                {
                     send(SentMessage {
                         dest: msg.source,
                         value: if (sign != 0) ^ (msg.value < 0) {

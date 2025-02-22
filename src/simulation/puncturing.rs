@@ -1,6 +1,6 @@
 //! Code puncturing.
 
-use ndarray::{s, Array1, ArrayBase, Data, Ix1};
+use ndarray::{Array1, ArrayBase, Data, Ix1, s};
 use thiserror::Error;
 
 /// Puncturer.
