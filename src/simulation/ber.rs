@@ -11,8 +11,8 @@ use super::{
 };
 use crate::{
     decoder::{
-        factory::{DecoderFactory, DecoderImplementation},
         LdpcDecoder,
+        factory::{DecoderFactory, DecoderImplementation},
     },
     encoder::{Encoder, Error},
     gf2::GF2,
@@ -20,7 +20,7 @@ use crate::{
 };
 use ndarray::Array1;
 use num_traits::{One, Zero};
-use rand::{distributions::Standard, Rng};
+use rand::{Rng, distributions::Standard};
 use std::{
     sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError},
     time::{Duration, Instant},
@@ -431,7 +431,7 @@ impl<Mod: Modulation> Worker<Mod> {
         let bit_errors = message
             .iter()
             .zip(decoded.iter())
-            .filter(|(&a, &b)| a != b)
+            .filter(|(a, b)| a != b)
             .count() as u64;
         let frame_error = bit_errors > 0;
         let false_decode = frame_error && success;

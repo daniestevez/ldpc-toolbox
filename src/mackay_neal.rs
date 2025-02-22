@@ -214,11 +214,7 @@ impl MacKayNeal {
                 let avail_rows: Vec<(usize, usize)> = (0..self.h.num_rows())
                     .filter_map(|r| {
                         let w = self.h.row_weight(r);
-                        if w < self.wr {
-                            Some((r, w))
-                        } else {
-                            None
-                        }
+                        if w < self.wr { Some((r, w)) } else { None }
                     })
                     .collect();
                 avail_rows

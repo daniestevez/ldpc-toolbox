@@ -81,9 +81,9 @@ pub struct Args<
 }
 
 impl<
-        Dec: DecoderFactory + FromStr<Err = E>,
-        E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
-    > Run for Args<Dec, E>
+    Dec: DecoderFactory + FromStr<Err = E>,
+    E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
+> Run for Args<Dec, E>
 {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         let puncturing_pattern = if let Some(p) = self.puncturing.as_ref() {
@@ -151,9 +151,9 @@ impl<
 }
 
 impl<
-        Dec: DecoderFactory + FromStr<Err = E>,
-        E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
-    > Args<Dec, E>
+    Dec: DecoderFactory + FromStr<Err = E>,
+    E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
+> Args<Dec, E>
 {
     fn write_details<W: Write>(&self, mut f: W, test: &dyn Ber) -> std::io::Result<()> {
         writeln!(f, "BER TEST PARAMETERS")?;

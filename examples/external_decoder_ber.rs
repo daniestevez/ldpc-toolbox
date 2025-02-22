@@ -1,9 +1,9 @@
 use clap::Parser;
 use ldpc_toolbox::{
-    cli::{ber::Args, Run},
+    cli::{Run, ber::Args},
     decoder::{
-        factory::{self, DecoderFactory},
         DecoderOutput, LdpcDecoder,
+        factory::{self, DecoderFactory},
     },
     sparse::SparseMatrix,
 };

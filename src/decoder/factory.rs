@@ -4,7 +4,7 @@
 //! different internal implementations. Such decoders are represented by
 //! `Box<dyn LdpcDecoder>`, using the trait [`LdpcDecoder`].
 
-use super::{arithmetic::*, flooding, horizontal_layered, LdpcDecoder};
+use super::{LdpcDecoder, arithmetic::*, flooding, horizontal_layered};
 use crate::sparse::SparseMatrix;
 use std::fmt::Display;
 

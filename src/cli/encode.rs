@@ -50,13 +50,11 @@ impl Run for Args {
                 Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
                 ret => ret?,
             };
-            let word = Array1::from_iter(information_word.iter().map(|&b| {
-                if b == 1 {
-                    GF2::one()
-                } else {
-                    GF2::zero()
-                }
-            }));
+            let word = Array1::from_iter(
+                information_word
+                    .iter()
+                    .map(|&b| if b == 1 { GF2::one() } else { GF2::zero() }),
+            );
             let codeword = encoder.encode(&word);
             let codeword = match &puncturer {
                 Some(p) => p.puncture(&codeword)?,

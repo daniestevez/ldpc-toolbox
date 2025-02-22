@@ -1,4 +1,4 @@
-use ndarray::{s, Array2, LinalgScalar};
+use ndarray::{Array2, LinalgScalar, s};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum Error {

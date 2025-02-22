@@ -35,15 +35,11 @@ impl Encoder {
     }
 
     fn encode(&self, output: &mut [u8], input: &[u8]) {
-        let encoded = self
-            .encoder
-            .encode(&Array1::from_iter(input.iter().map(|&b| {
-                if b == 1 {
-                    GF2::one()
-                } else {
-                    GF2::zero()
-                }
-            })));
+        let encoded = self.encoder.encode(&Array1::from_iter(
+            input
+                .iter()
+                .map(|&b| if b == 1 { GF2::one() } else { GF2::zero() }),
+        ));
         let encoded = if let Some(p) = &self.puncturer {
             p.puncture(&encoded).unwrap()
         } else {
@@ -56,40 +52,37 @@ impl Encoder {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_encoder_ctor(
     alist_file_path: *const c_char,
     puncturing: *const c_char,
 ) -> *mut c_void {
-    let alist_file_path = c_to_string(alist_file_path);
-    let puncturing = c_to_string(puncturing);
-    if let Ok(encoder) = Encoder::from_alist_file(&alist_file_path, &puncturing) {
-        Box::into_raw(Box::new(encoder)) as *mut c_void
-    } else {
-        std::ptr::null_mut()
-    }
+    let alist_file_path = unsafe { c_to_string(alist_file_path) };
+    let puncturing = unsafe { c_to_string(puncturing) };
+    Encoder::from_alist_file(&alist_file_path, &puncturing)
+        .map_or(std::ptr::null_mut(), |encoder| {
+            Box::into_raw(Box::new(encoder)) as *mut c_void
+        })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_encoder_ctor_alist_string(
     alist: *const c_char,
     puncturing: *const c_char,
 ) -> *mut c_void {
-    let alist = c_to_string(alist);
-    let puncturing = c_to_string(puncturing);
-    if let Ok(encoder) = Encoder::new(&alist, &puncturing) {
+    let alist = unsafe { c_to_string(alist) };
+    let puncturing = unsafe { c_to_string(puncturing) };
+    Encoder::new(&alist, &puncturing).map_or(std::ptr::null_mut(), |encoder| {
         Box::into_raw(Box::new(encoder)) as *mut c_void
-    } else {
-        std::ptr::null_mut()
-    }
+    })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_encoder_dtor(encoder: *mut c_void) {
-    drop(Box::from_raw(encoder as *mut Encoder));
+    drop(unsafe { Box::from_raw(encoder as *mut Encoder) });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn ldpc_toolbox_encoder_encode(
     encoder: *mut c_void,
     output: *mut u8,
@@ -97,8 +90,8 @@ unsafe extern "C" fn ldpc_toolbox_encoder_encode(
     input: *const u8,
     input_len: size_t,
 ) {
-    let output = std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len));
-    let input = std::slice::from_raw_parts(input, size_t_to_usize(input_len));
-    let encoder = &mut *(encoder as *mut Encoder);
+    let output = unsafe { std::slice::from_raw_parts_mut(output, size_t_to_usize(output_len)) };
+    let input = unsafe { std::slice::from_raw_parts(input, size_t_to_usize(input_len)) };
+    let encoder = unsafe { &mut *(encoder as *mut Encoder) };
     encoder.encode(output, input);
 }

@@ -7,8 +7,8 @@
 //! E. Sharon, S. Litsyn, and J. Goldberg.
 
 use super::{
-    arithmetic::DecoderArithmetic, check_llrs, hard_decisions, DecoderOutput, LdpcDecoder,
-    SentMessages,
+    DecoderOutput, LdpcDecoder, SentMessages, arithmetic::DecoderArithmetic, check_llrs,
+    hard_decisions,
 };
 use crate::sparse::SparseMatrix;
 
