@@ -23,7 +23,7 @@ pub struct Args {
     alist: String,
     /// input file (information words as unpacked bits)
     input: String,
-    /// input file (punctured words as unpacked bits)
+    /// output file (punctured words as unpacked bits)
     output: String,
     /// Puncturing pattern (format "1,1,1,0")
     #[structopt(long)]
