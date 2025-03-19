@@ -271,5 +271,5 @@ impl_decoderimplementation!(
     DecoderImplementation::HLAminstarf64, Aminstarf64, horizontal_layered, "HLAminstarf64";
     DecoderImplementation::HLAminstarf32, Aminstarf32, horizontal_layered, "HLAminstarf32";
     DecoderImplementation::HLAminstari8, Aminstari8, horizontal_layered, "HLAminstari8";
-    DecoderImplementation::HLAminstari8PartialHardLimit, Aminstari8, horizontal_layered, "HLAminstari8PartialHardLimit";
+    DecoderImplementation::HLAminstari8PartialHardLimit, Aminstari8PartialHardLimit, horizontal_layered, "HLAminstari8PartialHardLimit";
 );
