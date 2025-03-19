@@ -1079,13 +1079,19 @@ macro_rules! impl_aminstari8 {
         /// This is a [`DecoderArithmetic`] that uses `i8` to represent the LLRs
         /// and messages and computes the check node messages using an approximation
         /// to the min* rule.
-        #[derive(Debug, Clone, Default)]
+        #[derive(Debug, Clone)]
         pub struct $ty {
             table: Box<[i8]>,
             _minstars: Vec<i8>,
         }
 
         impl_8bitquant!($ty);
+
+        impl Default for $ty {
+            fn default() -> $ty {
+                <$ty>::new()
+            }
+        }
 
         impl DecoderArithmetic for $ty {
             type Llr = i8;
