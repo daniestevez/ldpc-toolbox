@@ -12,8 +12,7 @@
 //! assert_eq!(rng.next_u64(), 12578764544318200737);
 //! ```
 use rand_chacha::ChaCha8Rng;
-pub use rand_chacha::rand_core::SeedableRng;
-pub use rand_core::RngCore;
+pub use rand_chacha::rand_core::{RngCore, SeedableRng};
 
 /// The RNG used in throughout this crate for algorithms using pseudorandom
 /// generation.

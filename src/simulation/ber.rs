@@ -20,7 +20,7 @@ use crate::{
 };
 use ndarray::Array1;
 use num_traits::{One, Zero};
-use rand::{Rng, distributions::Standard};
+use rand::{Rng, distr::StandardUniform};
 use std::{
     sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError},
     time::{Duration, Instant},
@@ -379,7 +379,7 @@ impl<Mod: Modulation, Dec: DecoderFactory> Ber for BerTest<Mod, Dec> {
 
 impl<Mod: Modulation> Worker<Mod> {
     fn work(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         loop {
             match self.terminate_rx.try_recv() {
                 Ok(()) => return Ok(()),
@@ -444,7 +444,7 @@ impl<Mod: Modulation> Worker<Mod> {
     }
 
     fn random_message<R: Rng>(rng: &mut R, size: usize) -> Vec<u8> {
-        rng.sample_iter(Standard)
+        rng.sample_iter(StandardUniform)
             .map(<u8 as From<bool>>::from)
             .take(size)
             .collect()
