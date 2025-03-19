@@ -61,7 +61,7 @@ pub trait Demodulator: Send {
     fn demodulate(&self, symbols: &[Self::T]) -> Vec<f64>;
 }
 
-/// BPSK modulation
+/// BPSK modulation.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct Bpsk {}
 
@@ -141,7 +141,7 @@ impl Demodulator for BpskDemodulator {
     }
 }
 
-/// BPSK modulation
+/// 8PSK modulation.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct Psk8 {}
 
