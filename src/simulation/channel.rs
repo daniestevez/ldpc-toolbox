@@ -105,7 +105,7 @@ mod test {
     #[test]
     fn zero_noise_sigma() {
         let channel = AwgnChannel::new(0.0);
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut symbols = vec![1.0; 1024];
         let symbols_orig = symbols.clone();
         channel.add_noise(&mut rng, &mut symbols);
