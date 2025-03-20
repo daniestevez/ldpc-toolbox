@@ -6,6 +6,7 @@
 
 use super::{LdpcDecoder, arithmetic::*, flooding, horizontal_layered};
 use crate::sparse::SparseMatrix;
+use clap::ValueEnum;
 use std::fmt::Display;
 
 /// Decoder factory.
@@ -27,7 +28,8 @@ pub trait DecoderFactory: Display + Clone + Sync + Send + 'static {
 ///
 /// This enum lists the LDPC decoder implementations corresponding to different
 /// arithmetic rules.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, ValueEnum)]
+#[clap(rename_all = "verbatim")]
 pub enum DecoderImplementation {
     /// The [`Phif64`] implementation, using `f64` and the involution
     /// `phi(x)`. This uses a flooding schedule.

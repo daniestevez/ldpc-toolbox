@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum, builder::PossibleValue};
 use ldpc_toolbox::{
     cli::{Run, ber::Args},
     decoder::{
@@ -7,7 +7,7 @@ use ldpc_toolbox::{
     },
     sparse::SparseMatrix,
 };
-use std::{error::Error, fmt::Display, str::FromStr};
+use std::{error::Error, fmt::Display, sync::LazyLock};
 
 #[derive(Debug)]
 struct ExampleDecoder {}
@@ -44,24 +44,34 @@ impl DecoderFactory for DecoderImplementation {
     }
 }
 
-impl FromStr for DecoderImplementation {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "Example" {
-            return Ok(DecoderImplementation::Example);
-        }
-        Ok(DecoderImplementation::DecoderImplementation(
-            factory::DecoderImplementation::from_str(s)?,
-        ))
-    }
-}
-
 impl Display for DecoderImplementation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             DecoderImplementation::DecoderImplementation(d) => d.fmt(f),
             DecoderImplementation::Example => write!(f, "Example"),
+        }
+    }
+}
+
+impl ValueEnum for DecoderImplementation {
+    fn value_variants<'a>() -> &'a [Self] {
+        static VARIANTS: LazyLock<Vec<DecoderImplementation>> = LazyLock::new(|| {
+            let mut variants = factory::DecoderImplementation::value_variants()
+                .iter()
+                .map(|&variant| DecoderImplementation::DecoderImplementation(variant))
+                .collect::<Vec<_>>();
+            variants.push(DecoderImplementation::Example);
+            variants
+        });
+        &VARIANTS
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        match self {
+            DecoderImplementation::DecoderImplementation(a) => a.to_possible_value(),
+            DecoderImplementation::Example => {
+                Some(PossibleValue::new("Example").help("Example decoder"))
+            }
         }
     }
 }

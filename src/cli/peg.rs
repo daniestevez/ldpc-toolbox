@@ -24,7 +24,7 @@ use std::error::Error;
 
 /// PEG CLI arguments.
 #[derive(Debug, Parser)]
-#[structopt(about = "Generates LDPC codes using the Progressive Edge Growth algorithm")]
+#[command(about = "Generates LDPC codes using the Progressive Edge Growth algorithm")]
 pub struct Args {
     /// Number of rows
     num_rows: usize,
@@ -35,7 +35,7 @@ pub struct Args {
     /// Seed
     seed: u64,
     /// Performs girth calculation
-    #[structopt(long)]
+    #[arg(long)]
     girth: bool,
 }
 

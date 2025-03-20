@@ -22,13 +22,12 @@ use crate::{
     },
     sparse::SparseMatrix,
 };
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use console::Term;
 use std::{
     error::Error,
     fs::File,
     io::Write,
-    str::FromStr,
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
@@ -36,55 +35,48 @@ use std::{
 /// BER test CLI arguments.
 #[derive(Debug, Parser)]
 #[command(about = "Performs a BER simulation")]
-pub struct Args<
-    Dec: DecoderFactory + FromStr<Err = E> = DecoderImplementation,
-    E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>> = &'static str,
-> {
+pub struct Args<Dec: DecoderFactory + ValueEnum = DecoderImplementation> {
     /// alist file for the code
     alist: String,
     /// Output file for simulation results
-    #[structopt(long)]
+    #[arg(long)]
     output_file: Option<String>,
     /// Output file for LDPC-only results (only useful when using BCH)
-    #[structopt(long)]
+    #[arg(long)]
     output_file_ldpc: Option<String>,
     /// Decoder implementation
-    #[structopt(long, default_value = "Phif64")]
+    #[arg(long, default_value = "Phif64")]
     decoder: Dec,
     /// Modulation
-    #[structopt(long, default_value = "BPSK")]
+    #[arg(long, default_value_t = Modulation::Bpsk)]
     modulation: Modulation,
     /// Puncturing pattern (format "1,1,1,0")
-    #[structopt(long)]
+    #[arg(long)]
     puncturing: Option<String>,
     /// Interleaving columns (negative for backwards read)
-    #[structopt(long)]
+    #[arg(long)]
     interleaving: Option<isize>,
     /// Minimum Eb/N0 (dB)
-    #[structopt(long)]
+    #[arg(long)]
     min_ebn0: f64,
     /// Maximum Eb/N0 (dB)
-    #[structopt(long)]
+    #[arg(long)]
     max_ebn0: f64,
     /// Eb/N0 step (dB)
-    #[structopt(long)]
+    #[arg(long)]
     step_ebn0: f64,
     /// Maximum number of iterations
-    #[structopt(long, default_value = "100")]
+    #[arg(long, default_value = "100")]
     max_iter: usize,
     /// Number of frame errors to collect
-    #[structopt(long, default_value = "100")]
+    #[arg(long, default_value = "100")]
     frame_errors: u64,
     /// Maximum number of bit errors that the BCH decoder can correct (0 means no BCH decoder)
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value = "0")]
     bch_max_errors: u64,
 }
 
-impl<
-    Dec: DecoderFactory + FromStr<Err = E>,
-    E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
-> Run for Args<Dec, E>
-{
+impl<Dec: DecoderFactory + ValueEnum> Run for Args<Dec> {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         let puncturing_pattern = if let Some(p) = self.puncturing.as_ref() {
             Some(parse_puncturing_pattern(p)?)
@@ -150,11 +142,7 @@ impl<
     }
 }
 
-impl<
-    Dec: DecoderFactory + FromStr<Err = E>,
-    E: Into<Box<(dyn std::error::Error + Send + Sync + 'static)>>,
-> Args<Dec, E>
-{
+impl<Dec: DecoderFactory + ValueEnum> Args<Dec> {
     fn write_details<W: Write>(&self, mut f: W, test: &dyn Ber) -> std::io::Result<()> {
         writeln!(f, "BER TEST PARAMETERS")?;
         writeln!(f, "-------------------")?;
