@@ -11,6 +11,7 @@ use crate::{
     decoder::factory::{DecoderFactory, DecoderImplementation},
     sparse::SparseMatrix,
 };
+use clap::ValueEnum;
 
 /// BER test.
 ///
@@ -74,7 +75,8 @@ pub struct BerTestBuilder<'a, Dec = DecoderImplementation> {
 /// Modulation.
 ///
 /// This enum represents the modulations that can be simulated.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, ValueEnum)]
+#[clap(rename_all = "UPPER")]
 pub enum Modulation {
     /// BPSK modulation.
     Bpsk,

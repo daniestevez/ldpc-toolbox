@@ -55,25 +55,25 @@ pub struct Args {
     /// Seed
     seed: u64,
     /// Columns to backtrack
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     backtrack_cols: usize,
     /// Backtrack attemps
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     backtrack_trials: usize,
     /// Minimum girth
-    #[structopt(long)]
+    #[arg(long)]
     min_girth: Option<usize>,
     /// Girth trials
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0)]
     girth_trials: usize,
     /// Use uniform fill policy
-    #[structopt(long)]
+    #[arg(long)]
     uniform: bool,
     /// Maximum seed trials
-    #[structopt(long, default_value = "1000")]
+    #[arg(long, default_value_t = 1000)]
     seed_trials: u64,
     /// Try several seeds in parallel
-    #[structopt(long)]
+    #[arg(long)]
     search: bool,
 }
 
