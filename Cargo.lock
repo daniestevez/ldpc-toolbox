@@ -240,7 +240,7 @@ checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
 name = "ldpc-toolbox"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "clap",
  "console",
