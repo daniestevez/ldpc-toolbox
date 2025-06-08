@@ -2,3 +2,4 @@
 
 pub mod ccsds;
 pub mod dvbs2;
+pub mod nr5g;
