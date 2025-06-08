@@ -14,6 +14,7 @@ pub mod ccsds_c2;
 pub mod dvbs2;
 pub mod encode;
 pub mod mackay_neal;
+pub mod nr5g;
 pub mod peg;
 pub mod systematic;
 
@@ -27,6 +28,9 @@ pub trait Run {
 #[derive(Debug, Parser)]
 #[command(author, version, name = "ldpc-toolbox", about = "LDPC toolbox")]
 pub enum Args {
+    /// Generates the alist of 5G NR LDPC codes.
+    #[command(name = "5g")]
+    NR5G(nr5g::Args),
     /// ber subcommand
     BER(ber::Args),
     /// ccsds subcommand
@@ -55,6 +59,7 @@ impl Run for Args {
             Args::DVBS2(x) => x.run(),
             Args::Encode(x) => x.run(),
             Args::MackayNeal(x) => x.run(),
+            Args::NR5G(x) => x.run(),
             Args::PEG(x) => x.run(),
             Args::Systematic(x) => x.run(),
         }
