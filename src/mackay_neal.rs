@@ -185,6 +185,7 @@ impl MacKayNeal {
     fn try_insert_column(&mut self) -> Result<()> {
         let rows = self.select_rows()?;
         self.h.insert_col(self.current_col, rows.into_iter());
+        #[allow(clippy::collapsible_if)]
         if let Some(g) = self.min_girth {
             if self
                 .h

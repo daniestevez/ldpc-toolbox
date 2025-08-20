@@ -259,6 +259,7 @@ impl Progress {
                 }
                 return Ok(());
             };
+            #[allow(clippy::collapsible_if)]
             if let Some(s) = &last_stats {
                 if s.ebn0_db != stats.ebn0_db {
                     if let Some(f) = &mut self.output_file {
