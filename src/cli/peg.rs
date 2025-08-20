@@ -53,6 +53,16 @@ impl Run for Args {
     fn run(&self) -> Result<(), Box<dyn Error>> {
         let conf = self.config();
         let h = conf.run(self.seed)?;
+        for r in 0..h.num_rows() {
+            if h.row_weight(r) < 2 {
+                eprint!("warning: at least 1 row weight ≤ 1");
+                if conf.wc < 3 {
+                    eprint!(" (try col weight ≥ 3?)");
+                }
+                eprintln!();
+                break;
+            }
+        }
         println!("{}", h.alist());
         if self.girth {
             match h.girth() {

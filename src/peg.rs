@@ -22,6 +22,10 @@
 //!
 //! This procedure tries to maximize local girth greedily and to fill the
 //! check nodes uniformly.
+//!
+//! Note that no check of row weights is currently performed. If any row has
+//! weight less than 2, the resulting matrix is likely to be poorly suited to
+//! decoding. It is suggested that the column weight `wc` be at least 3.
 
 use crate::rand::{Rng, *};
 use crate::sparse::{Node, SparseMatrix};
