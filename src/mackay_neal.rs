@@ -185,15 +185,14 @@ impl MacKayNeal {
     fn try_insert_column(&mut self) -> Result<()> {
         let rows = self.select_rows()?;
         self.h.insert_col(self.current_col, rows.into_iter());
-        if let Some(g) = self.min_girth {
-            if self
+        if let Some(g) = self.min_girth
+            && self
                 .h
                 .girth_at_node_with_max(Node::Col(self.current_col), g - 1)
                 .is_some()
-            {
-                self.h.clear_col(self.current_col);
-                return Err(Error::GirthTooSmall);
-            }
+        {
+            self.h.clear_col(self.current_col);
+            return Err(Error::GirthTooSmall);
         }
         Ok(())
     }
