@@ -259,14 +259,14 @@ impl Progress {
                 }
                 return Ok(());
             };
-            if let Some(s) = &last_stats {
-                if s.ebn0_db != stats.ebn0_db {
-                    if let Some(f) = &mut self.output_file {
-                        writeln!(f, "{}", &Self::format_progress(s, false))?;
-                    }
-                    if let Some(f) = &mut self.output_file_ldpc {
-                        writeln!(f, "{}", &Self::format_progress(s, true))?;
-                    }
+            if let Some(s) = &last_stats
+                && s.ebn0_db != stats.ebn0_db
+            {
+                if let Some(f) = &mut self.output_file {
+                    writeln!(f, "{}", &Self::format_progress(s, false))?;
+                }
+                if let Some(f) = &mut self.output_file_ldpc {
+                    writeln!(f, "{}", &Self::format_progress(s, true))?;
                 }
             }
             match &last_stats {
