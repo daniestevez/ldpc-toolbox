@@ -28,6 +28,7 @@ use std::{
     error::Error,
     fs::File,
     io::Write,
+    path::PathBuf,
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
@@ -37,13 +38,13 @@ use std::{
 #[command(about = "Performs a BER simulation")]
 pub struct Args<Dec: DecoderFactory + ValueEnum = DecoderImplementation> {
     /// alist file for the code
-    pub alist: String,
+    pub alist: PathBuf,
     /// Output file for simulation results
     #[arg(long)]
-    pub output_file: Option<String>,
+    pub output_file: Option<PathBuf>,
     /// Output file for LDPC-only results (only useful when using BCH)
     #[arg(long)]
-    pub output_file_ldpc: Option<String>,
+    pub output_file_ldpc: Option<PathBuf>,
     /// Decoder implementation
     #[arg(long, default_value = "Phif64")]
     pub decoder: Dec,
@@ -154,7 +155,7 @@ impl<Dec: DecoderFactory + ValueEnum> Args<Dec> {
         writeln!(f, "Channel:")?;
         writeln!(f, " - Modulation: {}", self.modulation)?;
         writeln!(f, "LDPC code:")?;
-        writeln!(f, " - alist: {}", self.alist)?;
+        writeln!(f, " - alist: {}", self.alist.display())?;
         if let Some(puncturing) = self.puncturing.as_ref() {
             writeln!(f, " - Puncturing pattern: {puncturing}")?;
         }

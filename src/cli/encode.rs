@@ -13,6 +13,7 @@ use std::{
     error::Error,
     fs::File,
     io::{ErrorKind, Read, Write},
+    path::PathBuf,
 };
 
 /// Encode CLI arguments.
@@ -20,11 +21,11 @@ use std::{
 #[command(about = "Performs LDPC encoding")]
 pub struct Args {
     /// alist file for the code
-    pub alist: String,
+    pub alist: PathBuf,
     /// input file (information words as unpacked bits)
-    pub input: String,
+    pub input: PathBuf,
     /// output file (punctured words as unpacked bits)
-    pub output: String,
+    pub output: PathBuf,
     /// Puncturing pattern (format "1,1,1,0")
     #[structopt(long)]
     pub puncturing: Option<String>,
