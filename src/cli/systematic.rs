@@ -14,7 +14,7 @@ use std::error::Error;
 #[command(about = "Converts a parity check matrix into systematic form")]
 pub struct Args {
     /// alist file for the code
-    alist: String,
+    pub alist: String,
 }
 
 impl Run for Args {

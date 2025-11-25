@@ -24,13 +24,13 @@ use clap::Parser;
 pub struct Args {
     /// Base graph
     #[arg(long)]
-    base_graph: BaseGraph,
+    pub base_graph: BaseGraph,
     /// Lifting size
     #[arg(long)]
-    lifting_size: LiftingSize,
+    pub lifting_size: LiftingSize,
     /// Performs girth calculation
     #[arg(long)]
-    girth: bool,
+    pub girth: bool,
 }
 
 impl Run for Args {

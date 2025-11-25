@@ -35,15 +35,13 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct Args {
     /// Coding rate
     #[arg(short, long)]
-    rate: String,
-
+    pub rate: String,
     /// Enables short FECFRAME
     #[arg(long)]
-    short: bool,
-
+    pub short: bool,
     /// Performs girth calculation
     #[arg(long)]
-    girth: bool,
+    pub girth: bool,
 }
 
 impl Args {

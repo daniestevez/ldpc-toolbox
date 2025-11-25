@@ -27,16 +27,16 @@ use std::error::Error;
 #[command(about = "Generates LDPC codes using the Progressive Edge Growth algorithm")]
 pub struct Args {
     /// Number of rows
-    num_rows: usize,
+    pub num_rows: usize,
     /// Number of columns
-    num_columns: usize,
+    pub num_columns: usize,
     /// Column weight
-    wc: usize,
+    pub wc: usize,
     /// Seed
-    seed: u64,
+    pub seed: u64,
     /// Performs girth calculation
     #[arg(long)]
-    girth: bool,
+    pub girth: bool,
 }
 
 impl Args {

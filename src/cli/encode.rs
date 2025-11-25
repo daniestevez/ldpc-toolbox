@@ -20,14 +20,14 @@ use std::{
 #[command(about = "Performs LDPC encoding")]
 pub struct Args {
     /// alist file for the code
-    alist: String,
+    pub alist: String,
     /// input file (information words as unpacked bits)
-    input: String,
+    pub input: String,
     /// output file (punctured words as unpacked bits)
-    output: String,
+    pub output: String,
     /// Puncturing pattern (format "1,1,1,0")
     #[structopt(long)]
-    puncturing: Option<String>,
+    pub puncturing: Option<String>,
 }
 
 impl Run for Args {
