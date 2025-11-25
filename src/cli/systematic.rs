@@ -7,14 +7,14 @@
 
 use crate::{cli::Run, sparse::SparseMatrix, systematic::parity_to_systematic};
 use clap::Parser;
-use std::error::Error;
+use std::{error::Error, path::PathBuf};
 
 /// Systematic CLI arguments.
 #[derive(Debug, Parser)]
 #[command(about = "Converts a parity check matrix into systematic form")]
 pub struct Args {
     /// alist file for the code
-    pub alist: String,
+    pub alist: PathBuf,
 }
 
 impl Run for Args {
