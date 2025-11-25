@@ -51,7 +51,7 @@ impl Puncturer {
     {
         let pattern_len = self.pattern.len();
         let codeword_len = codeword.shape()[0];
-        if codeword_len % pattern_len != 0 {
+        if !codeword_len.is_multiple_of(pattern_len) {
             return Err(Error::CodewordSizeNotDivisible);
         }
         let block_size = codeword_len / pattern_len;
@@ -81,7 +81,7 @@ impl Puncturer {
     /// returned if the length of input is not divisible by the number of `true`
     /// elements in the pattern.
     pub fn depuncture<T: Copy + Default>(&self, llrs: &[T]) -> Result<Vec<T>, Error> {
-        if llrs.len() % self.num_trues != 0 {
+        if !llrs.len().is_multiple_of(self.num_trues) {
             return Err(Error::CodewordSizeNotDivisible);
         }
         let block_size = llrs.len() / self.num_trues;
