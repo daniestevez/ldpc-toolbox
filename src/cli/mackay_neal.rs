@@ -45,36 +45,36 @@ use std::error::Error;
 #[command(about = "Generates LDPC codes using the MacKay-Neal algorithm")]
 pub struct Args {
     /// Number of rows
-    num_rows: usize,
+    pub num_rows: usize,
     /// Number of columns
-    num_columns: usize,
+    pub num_columns: usize,
     /// Maximum row weight
-    wr: usize,
+    pub wr: usize,
     /// Column weight
-    wc: usize,
+    pub wc: usize,
     /// Seed
-    seed: u64,
+    pub seed: u64,
     /// Columns to backtrack
     #[arg(long, default_value_t = 0)]
-    backtrack_cols: usize,
+    pub backtrack_cols: usize,
     /// Backtrack attemps
     #[arg(long, default_value_t = 0)]
-    backtrack_trials: usize,
+    pub backtrack_trials: usize,
     /// Minimum girth
     #[arg(long)]
-    min_girth: Option<usize>,
+    pub min_girth: Option<usize>,
     /// Girth trials
     #[arg(long, default_value_t = 0)]
-    girth_trials: usize,
+    pub girth_trials: usize,
     /// Use uniform fill policy
     #[arg(long)]
-    uniform: bool,
+    pub uniform: bool,
     /// Maximum seed trials
     #[arg(long, default_value_t = 1000)]
-    seed_trials: u64,
+    pub seed_trials: u64,
     /// Try several seeds in parallel
     #[arg(long)]
-    search: bool,
+    pub search: bool,
 }
 
 impl Args {

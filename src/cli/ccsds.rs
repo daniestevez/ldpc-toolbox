@@ -30,15 +30,13 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct Args {
     /// Coding rate
     #[arg(short, long)]
-    rate: String,
-
+    pub rate: String,
     /// Information block size (k)
     #[arg(long)]
-    block_size: usize,
-
+    pub block_size: usize,
     /// Performs girth calculation
     #[arg(long)]
-    girth: bool,
+    pub girth: bool,
 }
 
 impl Args {

@@ -37,43 +37,43 @@ use std::{
 #[command(about = "Performs a BER simulation")]
 pub struct Args<Dec: DecoderFactory + ValueEnum = DecoderImplementation> {
     /// alist file for the code
-    alist: String,
+    pub alist: String,
     /// Output file for simulation results
     #[arg(long)]
-    output_file: Option<String>,
+    pub output_file: Option<String>,
     /// Output file for LDPC-only results (only useful when using BCH)
     #[arg(long)]
-    output_file_ldpc: Option<String>,
+    pub output_file_ldpc: Option<String>,
     /// Decoder implementation
     #[arg(long, default_value = "Phif64")]
-    decoder: Dec,
+    pub decoder: Dec,
     /// Modulation
     #[arg(long, default_value_t = Modulation::Bpsk)]
-    modulation: Modulation,
+    pub modulation: Modulation,
     /// Puncturing pattern (format "1,1,1,0")
     #[arg(long)]
-    puncturing: Option<String>,
+    pub puncturing: Option<String>,
     /// Interleaving columns (negative for backwards read)
     #[arg(long)]
-    interleaving: Option<isize>,
+    pub interleaving: Option<isize>,
     /// Minimum Eb/N0 (dB)
     #[arg(long)]
-    min_ebn0: f64,
+    pub min_ebn0: f64,
     /// Maximum Eb/N0 (dB)
     #[arg(long)]
-    max_ebn0: f64,
+    pub max_ebn0: f64,
     /// Eb/N0 step (dB)
     #[arg(long)]
-    step_ebn0: f64,
+    pub step_ebn0: f64,
     /// Maximum number of iterations
     #[arg(long, default_value = "100")]
-    max_iter: usize,
+    pub max_iter: usize,
     /// Number of frame errors to collect
     #[arg(long, default_value = "100")]
-    frame_errors: u64,
+    pub frame_errors: u64,
     /// Maximum number of bit errors that the BCH decoder can correct (0 means no BCH decoder)
     #[arg(long, default_value = "0")]
-    bch_max_errors: u64,
+    pub bch_max_errors: u64,
 }
 
 impl<Dec: DecoderFactory + ValueEnum> Run for Args<Dec> {
