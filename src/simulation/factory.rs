@@ -70,6 +70,8 @@ pub struct BerTestBuilder<'a, Dec = DecoderImplementation> {
     ///
     /// A value of zero means that there is no BCH decoder.
     pub bch_max_errors: u64,
+    /// Number of worker threads.
+    pub num_workers: usize,
 }
 
 /// Modulation.
@@ -126,6 +128,7 @@ impl<Dec: DecoderFactory> BerTestBuilder<'_, Dec> {
                 self.ebn0s_db,
                 self.reporter,
                 self.bch_max_errors,
+                self.num_workers,
             )?),
             Modulation::Psk8 => Box::new(BerTest::<Psk8, Dec>::new(
                 self.h,
@@ -137,6 +140,7 @@ impl<Dec: DecoderFactory> BerTestBuilder<'_, Dec> {
                 self.ebn0s_db,
                 self.reporter,
                 self.bch_max_errors,
+                self.num_workers,
             )?),
         })
     }

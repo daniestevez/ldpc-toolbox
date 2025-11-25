@@ -214,6 +214,7 @@ impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
         ebn0s_db: &[f32],
         reporter: Option<Reporter>,
         bch_max_errors: u64,
+        num_workers: usize,
     ) -> Result<BerTest<Mod, Dec>, Error> {
         let k = h.num_cols() - h.num_rows();
         let n_cw = h.num_cols();
@@ -228,7 +229,7 @@ impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
         let rate = k as f64 / n as f64;
         Ok(BerTest {
             decoder_implementation,
-            num_workers: num_cpus::get(),
+            num_workers,
             k,
             n,
             n_cw,

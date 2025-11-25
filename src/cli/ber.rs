@@ -75,6 +75,9 @@ pub struct Args<Dec: DecoderFactory + ValueEnum = DecoderImplementation> {
     /// Maximum number of bit errors that the BCH decoder can correct (0 means no BCH decoder)
     #[arg(long, default_value = "0")]
     pub bch_max_errors: u64,
+    /// Number of worker threads (defaults to the number of CPUs)
+    #[arg(long, default_value_t = num_cpus::get())]
+    pub num_threads: usize,
 }
 
 impl<Dec: DecoderFactory + ValueEnum> Run for Args<Dec> {
@@ -114,6 +117,7 @@ impl<Dec: DecoderFactory + ValueEnum> Run for Args<Dec> {
             ebn0s_db: &ebn0s,
             reporter: Some(reporter),
             bch_max_errors: self.bch_max_errors,
+            num_workers: self.num_threads,
         }
         .build()?;
         self.write_details(std::io::stdout(), &*test)?;
@@ -152,6 +156,7 @@ impl<Dec: DecoderFactory + ValueEnum> Args<Dec> {
         writeln!(f, " - Maximum Eb/N0: {:.2} dB", self.max_ebn0)?;
         writeln!(f, " - Eb/N0 step: {:.2} dB", self.step_ebn0)?;
         writeln!(f, " - Number of frame errors: {}", self.frame_errors)?;
+        writeln!(f, " - Number of worker threads: {}", self.num_threads)?;
         writeln!(f, "Channel:")?;
         writeln!(f, " - Modulation: {}", self.modulation)?;
         writeln!(f, "LDPC code:")?;
