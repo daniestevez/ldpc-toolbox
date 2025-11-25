@@ -19,10 +19,31 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// A sparse binary matrix
 ///
 /// The internal representation for this matrix is based on the alist format.
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(Eq, Debug, Clone)]
 pub struct SparseMatrix {
     rows: Vec<Vec<usize>>,
     cols: Vec<Vec<usize>>,
+}
+
+impl PartialEq for SparseMatrix {
+    fn eq(&self, other: &SparseMatrix) -> bool {
+        if self.num_rows() != other.num_rows() {
+            return false;
+        }
+        if self.num_cols() != other.num_cols() {
+            return false;
+        }
+        for (r1, r2) in self.rows.iter().zip(other.rows.iter()) {
+            let mut r1 = r1.clone();
+            let mut r2 = r2.clone();
+            r1.sort();
+            r2.sort();
+            if r1 != r2 {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 impl SparseMatrix {
