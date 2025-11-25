@@ -28,12 +28,12 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-console = "0.15"
+console = "0.16"
 ctrlc = "3"
 enum-iterator = "2"
 humantime = "2"
 libc = "0.2"
-ndarray = "0.16"
+ndarray = "0.17"
 num-complex = "0.4"
 num_cpus = "1"
 num-traits = "0.2"
