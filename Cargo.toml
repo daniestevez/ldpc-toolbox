@@ -1,7 +1,7 @@
 [package]
 name = "ldpc-toolbox"
 description = "Utilities to aid in LDPC code design"
-version = "0.11.0"
+version = "0.12.0"
 readme = "README.md"
 homepage = "https://github.com/daniestevez/ldpc-toolbox"
 repository = "https://github.com/daniestevez/ldpc-toolbox"

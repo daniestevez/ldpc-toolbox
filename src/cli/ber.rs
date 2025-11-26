@@ -17,7 +17,7 @@ use crate::{
     cli::*,
     decoder::factory::{DecoderFactory, DecoderImplementation},
     simulation::{
-        ber::{Report, Reporter, Statistics},
+        ber::{BerTestParameters, Report, Reporter, Statistics},
         factory::{Ber, BerTestBuilder, Modulation},
     },
     sparse::SparseMatrix,
@@ -72,6 +72,12 @@ pub struct Args<Dec: DecoderFactory + ValueEnum = DecoderImplementation> {
     /// Number of frame errors to collect
     #[arg(long, default_value = "100")]
     pub frame_errors: u64,
+    /// Minimum run time per Eb/N0 (if unset, the simulation finishes as soon as the frame errors are reached)
+    #[arg(long, value_parser = humantime::parse_duration)]
+    pub min_time: Option<Duration>,
+    /// Maximum run time per Eb/N0 (if unset, the simulation only finishes when the frame errors are reached)
+    #[arg(long, value_parser = humantime::parse_duration)]
+    pub max_time: Option<Duration>,
     /// Maximum number of bit errors that the BCH decoder can correct (0 means no BCH decoder)
     #[arg(long, default_value = "0")]
     pub bch_max_errors: u64,
@@ -107,17 +113,21 @@ impl<Dec: DecoderFactory + ValueEnum> Run for Args<Dec> {
             interval: Duration::from_millis(500),
         };
         let test = BerTestBuilder {
-            h,
-            decoder_implementation: self.decoder.clone(),
             modulation: self.modulation,
-            puncturing_pattern: puncturing_pattern.as_ref().map(|v| &v[..]),
-            interleaving_columns: self.interleaving,
-            max_frame_errors: self.frame_errors,
-            max_iterations: self.max_iter,
-            ebn0s_db: &ebn0s,
-            reporter: Some(reporter),
-            bch_max_errors: self.bch_max_errors,
-            num_workers: self.num_threads,
+            parameters: BerTestParameters {
+                h,
+                decoder_implementation: self.decoder.clone(),
+                puncturing_pattern: puncturing_pattern.as_ref().map(|v| &v[..]),
+                interleaving_columns: self.interleaving,
+                max_frame_errors: self.frame_errors,
+                min_run_time: self.min_time,
+                max_run_time: self.max_time,
+                max_iterations: self.max_iter,
+                ebn0s_db: &ebn0s,
+                reporter: Some(reporter),
+                bch_max_errors: self.bch_max_errors,
+                num_workers: self.num_threads,
+            },
         }
         .build()?;
         self.write_details(std::io::stdout(), &*test)?;
@@ -156,6 +166,20 @@ impl<Dec: DecoderFactory + ValueEnum> Args<Dec> {
         writeln!(f, " - Maximum Eb/N0: {:.2} dB", self.max_ebn0)?;
         writeln!(f, " - Eb/N0 step: {:.2} dB", self.step_ebn0)?;
         writeln!(f, " - Number of frame errors: {}", self.frame_errors)?;
+        if let Some(min_time) = self.min_time {
+            writeln!(
+                f,
+                " - Minimum run time per Eb/N0: {}",
+                humantime::format_duration(min_time)
+            )?;
+        }
+        if let Some(max_time) = self.max_time {
+            writeln!(
+                f,
+                " - Maximum run time per Eb/N0: {}",
+                humantime::format_duration(max_time)
+            )?;
+        }
         writeln!(f, " - Number of worker threads: {}", self.num_threads)?;
         writeln!(f, "Channel:")?;
         writeln!(f, " - Modulation: {}", self.modulation)?;

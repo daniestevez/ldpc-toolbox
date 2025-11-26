@@ -4,13 +4,10 @@
 //! trait object using the [`BerTestBuilder`].
 
 use super::{
-    ber::{BerTest, Reporter, Statistics},
+    ber::{BerTest, BerTestParameters, Statistics},
     modulation::{Bpsk, Psk8},
 };
-use crate::{
-    decoder::factory::{DecoderFactory, DecoderImplementation},
-    sparse::SparseMatrix,
-};
+use crate::decoder::factory::{DecoderFactory, DecoderImplementation};
 use clap::ValueEnum;
 
 /// BER test.
@@ -45,33 +42,10 @@ pub trait Ber {
 /// This struct contains all the parameters needed to create a BER test.
 #[derive(Debug)]
 pub struct BerTestBuilder<'a, Dec = DecoderImplementation> {
-    /// LDPC parity check matrix.
-    pub h: SparseMatrix,
-    /// LDPC decoder implementation.
-    pub decoder_implementation: Dec,
+    /// BER test parameters.
+    pub parameters: BerTestParameters<'a, Dec>,
     /// Modulation.
     pub modulation: Modulation,
-    /// Codeword puncturing pattern.
-    pub puncturing_pattern: Option<&'a [bool]>,
-    /// Codeword interleaving.
-    ///
-    /// A negative value indicates that the columns should be read backwards.
-    pub interleaving_columns: Option<isize>,
-    /// Maximum number of frame errors per Eb/N0.
-    pub max_frame_errors: u64,
-    /// Maximum number of iterations per codeword.
-    pub max_iterations: usize,
-    /// List of Eb/N0's (in dB) to simulate.
-    pub ebn0s_db: &'a [f32],
-    /// An optional reporter object to which the BER test will send periodic
-    /// updates about its progress.
-    pub reporter: Option<Reporter>,
-    /// Maximum number of bit errors that the BCH decoder can correct.
-    ///
-    /// A value of zero means that there is no BCH decoder.
-    pub bch_max_errors: u64,
-    /// Number of worker threads.
-    pub num_workers: usize,
 }
 
 /// Modulation.
@@ -117,31 +91,18 @@ impl<Dec: DecoderFactory> BerTestBuilder<'_, Dec> {
     /// This function only defines the BER test. To run it it is necessary to
     /// call the [`Ber::run`] method.
     pub fn build(self) -> Result<Box<dyn Ber>, Box<dyn std::error::Error>> {
-        Ok(match self.modulation {
-            Modulation::Bpsk => Box::new(BerTest::<Bpsk, Dec>::new(
-                self.h,
-                self.decoder_implementation,
-                self.puncturing_pattern,
-                self.interleaving_columns,
-                self.max_frame_errors,
-                self.max_iterations,
-                self.ebn0s_db,
-                self.reporter,
-                self.bch_max_errors,
-                self.num_workers,
-            )?),
-            Modulation::Psk8 => Box::new(BerTest::<Psk8, Dec>::new(
-                self.h,
-                self.decoder_implementation,
-                self.puncturing_pattern,
-                self.interleaving_columns,
-                self.max_frame_errors,
-                self.max_iterations,
-                self.ebn0s_db,
-                self.reporter,
-                self.bch_max_errors,
-                self.num_workers,
-            )?),
-        })
+        macro_rules! impl_match {
+            ($($modulation:ident),*) => {
+                match self.modulation {
+                    $(
+                        Modulation::$modulation => Box::new(BerTest::<$modulation, Dec>::new(
+                            self.parameters
+                        )?),
+                    )*
+                }
+            }
+        }
+
+        Ok(impl_match!(Bpsk, Psk8))
     }
 }
