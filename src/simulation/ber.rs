@@ -47,8 +47,52 @@ pub struct BerTest<Mod: Modulation, Dec = DecoderImplementation> {
     bch_max_errors: u64,
     max_iterations: usize,
     max_frame_errors: u64,
+    min_run_time: Duration,
+    max_run_time: Duration,
     reporter: Option<Reporter>,
     last_reported: Instant,
+}
+
+/// BER test parameters.
+///
+/// This struct contains the configuration of a BER test.
+#[derive(Debug)]
+pub struct BerTestParameters<'a, Dec = DecoderImplementation> {
+    /// LDPC parity check matrix.
+    pub h: SparseMatrix,
+    /// LDPC decoder implementation.
+    pub decoder_implementation: Dec,
+    /// Codeword puncturing pattern.
+    pub puncturing_pattern: Option<&'a [bool]>,
+    /// Codeword interleaving.
+    ///
+    /// A negative value indicates that the columns should be read backwards.
+    pub interleaving_columns: Option<isize>,
+    /// Maximum number of frame errors per Eb/N0.
+    pub max_frame_errors: u64,
+    /// Minimum run time per Eb/N0.
+    ///
+    /// If this value is set to `None`, the simulation finishes as soon as the
+    /// frame errors are reached.
+    pub min_run_time: Option<Duration>,
+    /// Maximum run time per Eb/N0.
+    ///
+    /// If this value is set to `None`, the simulation only finishes when the
+    /// frame errors are reached.
+    pub max_run_time: Option<Duration>,
+    /// Maximum number of iterations per codeword.
+    pub max_iterations: usize,
+    /// List of Eb/N0's (in dB) to simulate.
+    pub ebn0s_db: &'a [f32],
+    /// An optional reporter object to which the BER test will send periodic
+    /// updates about its progress.
+    pub reporter: Option<Reporter>,
+    /// Maximum number of bit errors that the BCH decoder can correct.
+    ///
+    /// A value of zero means that there is no BCH decoder.
+    pub bch_max_errors: u64,
+    /// Number of worker threads.
+    pub num_workers: usize,
 }
 
 #[derive(Debug)]
@@ -194,32 +238,18 @@ macro_rules! report {
 impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
     /// Creates a new BER test.
     ///
-    /// The parameters required to define the test are the parity check matrix
-    /// `h`, an optional puncturing pattern (which uses the semantics of
-    /// [`Puncturer`]), an optional interleaving pattern, the maximum number of
-    /// frame errors at which to stop the simulation for each Eb/N0, the maximum
-    /// number of iterations of the LDPC decoder, a list of Eb/N0's in dB units,
-    /// and an optional [`Reporter`] to send messages about the test progress.
+    /// The parameters required to define the test are given in the
+    /// [`BerTestParameters`] struct.
     ///
     /// This function only defines the BER test. To run it it is necessary to
     /// call the [`BerTest::run`] method.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        h: SparseMatrix,
-        decoder_implementation: Dec,
-        puncturing_pattern: Option<&[bool]>,
-        interleaving_columns: Option<isize>,
-        max_frame_errors: u64,
-        max_iterations: usize,
-        ebn0s_db: &[f32],
-        reporter: Option<Reporter>,
-        bch_max_errors: u64,
-        num_workers: usize,
-    ) -> Result<BerTest<Mod, Dec>, Error> {
-        let k = h.num_cols() - h.num_rows();
-        let n_cw = h.num_cols();
-        let puncturer = puncturing_pattern.map(Puncturer::new);
-        let interleaver = interleaving_columns.map(|n| Interleaver::new(n.unsigned_abs(), n < 0));
+    pub fn new(parameters: BerTestParameters<'_, Dec>) -> Result<BerTest<Mod, Dec>, Error> {
+        let k = parameters.h.num_cols() - parameters.h.num_rows();
+        let n_cw = parameters.h.num_cols();
+        let puncturer = parameters.puncturing_pattern.map(Puncturer::new);
+        let interleaver = parameters
+            .interleaving_columns
+            .map(|n| Interleaver::new(n.unsigned_abs(), n < 0));
         let puncturer_rate = if let Some(p) = puncturer.as_ref() {
             p.rate()
         } else {
@@ -228,23 +258,25 @@ impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
         let n = (n_cw as f64 / puncturer_rate).round() as usize;
         let rate = k as f64 / n as f64;
         Ok(BerTest {
-            decoder_implementation,
-            num_workers,
+            decoder_implementation: parameters.decoder_implementation,
+            num_workers: parameters.num_workers,
             k,
             n,
             n_cw,
             rate,
-            encoder: Encoder::from_h(&h)?,
-            h,
+            encoder: Encoder::from_h(&parameters.h)?,
+            h: parameters.h,
             puncturer,
             interleaver,
             modulator: Mod::Modulator::default(),
-            ebn0s_db: ebn0s_db.to_owned(),
-            statistics: Vec::with_capacity(ebn0s_db.len()),
-            bch_max_errors,
-            max_iterations,
-            max_frame_errors,
-            reporter,
+            ebn0s_db: parameters.ebn0s_db.to_owned(),
+            statistics: Vec::with_capacity(parameters.ebn0s_db.len()),
+            bch_max_errors: parameters.bch_max_errors,
+            max_iterations: parameters.max_iterations,
+            max_frame_errors: parameters.max_frame_errors,
+            min_run_time: parameters.min_run_time.unwrap_or(Duration::ZERO),
+            max_run_time: parameters.max_run_time.unwrap_or(Duration::MAX),
+            reporter: parameters.reporter,
             last_reported: Instant::now(),
         })
     }
@@ -278,7 +310,11 @@ impl<Mod: Modulation, Dec: DecoderFactory> BerTest<Mod, Dec> {
             .collect::<Vec<_>>();
 
             let mut current_statistics = CurrentStatistics::new(self.bch_max_errors > 0);
-            while current_statistics.errors_for_termination() < self.max_frame_errors {
+            while !current_statistics.run_finished(
+                self.max_frame_errors,
+                self.min_run_time,
+                self.max_run_time,
+            ) {
                 match results_rx.recv().unwrap() {
                     Ok(result) => {
                         current_statistics.ldpc.bit_errors += result.bit_errors;
@@ -481,6 +517,17 @@ impl CurrentStatistics {
         } else {
             self.ldpc.frame_errors
         }
+    }
+
+    fn run_finished(
+        &self,
+        max_frame_errors: u64,
+        min_run_time: Duration,
+        max_run_time: Duration,
+    ) -> bool {
+        let elapsed = self.start.elapsed();
+        (self.errors_for_termination() >= max_frame_errors && elapsed >= min_run_time)
+            || elapsed >= max_run_time
     }
 }
 
