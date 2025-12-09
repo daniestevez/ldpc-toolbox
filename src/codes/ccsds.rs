@@ -335,6 +335,148 @@ static PHI_K: [[[usize; 7]; 26]; 4] = [
     ],
 ];
 
+/// TC (telecommand) code definition.
+///
+/// These codes are the short rate 1/2 LDPC codes defined in CCSDS 231.0-B-4
+/// as specified for telecommand purposes.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TCCode {
+    k: TCInfoSize,
+}
+
+/// Telecommand information block size `k`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Sequence)]
+pub enum TCInfoSize {
+    /// k = 64
+    K64,
+    /// k = 256,
+    K256,
+}
+
+impl TCCode {
+    /// Creates a C2 code definition.
+    pub fn new(information_block_size: TCInfoSize) -> TCCode {
+        TCCode {
+            k: information_block_size,
+        }
+    }
+
+    /// Constructs the parity check matrix for the code.
+    pub fn h(&self) -> SparseMatrix {
+        // N = k/4
+        let n: usize = match self.k {
+            TCInfoSize::K64 => 16,
+            TCInfoSize::K256 => 64,
+        };
+
+        let mut h = SparseMatrix::new(Self::ROW_BLOCKS * n, Self::COL_BLOCKS * n);
+        for (row, circs) in get_tc_info_map(self.k).iter().enumerate() {
+            for (col, circs) in circs.iter().enumerate() {
+                for &circ in circs.iter() {
+                    let circ = usize::from(circ);
+                    for j in 0..n {
+                        h.insert(row * n + j, col * n + (j + circ) % n);
+                    }
+                }
+            }
+        }
+        h
+    }
+
+    const ROW_BLOCKS: usize = 4;
+    const COL_BLOCKS: usize = 8;
+}
+
+// Section 4.2.2 in CCSDS 231.0-B-4
+fn get_tc_info_map(size: TCInfoSize) -> [[Vec<u16>; TCCode::COL_BLOCKS]; TCCode::ROW_BLOCKS] {
+    match size {
+        TCInfoSize::K64 => [
+            [
+                vec![0, 7],
+                vec![2],
+                vec![14],
+                vec![6],
+                vec![],
+                vec![0],
+                vec![13],
+                vec![0],
+            ],
+            [
+                vec![6],
+                vec![0, 15],
+                vec![0],
+                vec![1],
+                vec![0],
+                vec![],
+                vec![0],
+                vec![7],
+            ],
+            [
+                vec![4],
+                vec![1],
+                vec![0, 15],
+                vec![14],
+                vec![11],
+                vec![0],
+                vec![],
+                vec![3],
+            ],
+            [
+                vec![0],
+                vec![1],
+                vec![9],
+                vec![0, 13],
+                vec![14],
+                vec![1],
+                vec![0],
+                vec![],
+            ],
+        ],
+        TCInfoSize::K256 => [
+            [
+                vec![0, 63],
+                vec![30],
+                vec![50],
+                vec![25],
+                vec![],
+                vec![43],
+                vec![62],
+                vec![0],
+            ],
+            [
+                vec![56],
+                vec![0, 61],
+                vec![50],
+                vec![23],
+                vec![0],
+                vec![],
+                vec![37],
+                vec![26],
+            ],
+            [
+                vec![16],
+                vec![0],
+                vec![0, 55],
+                vec![27],
+                vec![56],
+                vec![0],
+                vec![],
+                vec![43],
+            ],
+            [
+                vec![35],
+                vec![56],
+                vec![62],
+                vec![0, 11],
+                vec![58],
+                vec![3],
+                vec![0],
+                vec![],
+            ],
+        ],
+    }
+}
+
 /// C2 code definition.
 ///
 /// This C2 code is the basic (8176, 7156) LDPC code. Expurgation, shortening
